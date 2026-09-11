@@ -1,0 +1,12 @@
+[
+  {"title": "The Matrix", "year": 1999, "rating": 8.7, "genre": "Sci-Fi", "duration_min": 136},
+  {"title": "Inception", "year": 2010, "rating": 8.8, "genre": "Sci-Fi", "duration_min": 148},
+  {"title": "Spirited Away", "year": 2001, "rating": 8.6, "genre": "Animation", "duration_min": 125},
+  {"title": "Parasite", "year": 2019, "rating": 8.5, "genre": "Drama", "duration_min": 132},
+  {"title": "The Godfather", "year": 1972, "rating": 9.2, "genre": "Crime", "duration_min": 175},
+  {"title": "Pulp Fiction", "year": 1994, "rating": 8.9, "genre": "Crime", "duration_min": 154},
+  {"title": "Interstellar", "year": 2014, "rating": 8.6, "genre": "Sci-Fi", "duration_min": 169},
+  {"title": "Coco", "year": 2017, "rating": 8.4, "genre": "Animation", "duration_min": 105},
+  {"title": "Avengers: Endgame", "year": 2019, "rating": 8.4, "genre": "Action", "duration_min": 181},
+  {"title": "Whiplash", "year": 2014, "rating": 8.5, "genre": "Drama", "duration_min": 106}
+]

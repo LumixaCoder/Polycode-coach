@@ -1,0 +1,10 @@
+[
+  {"name": "Mercury", "distance_au": 0.39, "diameter_km": 4879, "moons": 0, "year_length_years": 0.24},
+  {"name": "Venus", "distance_au": 0.72, "diameter_km": 12104, "moons": 0, "year_length_years": 0.62},
+  {"name": "Earth", "distance_au": 1.0, "diameter_km": 12742, "moons": 1, "year_length_years": 1.0},
+  {"name": "Mars", "distance_au": 1.52, "diameter_km": 6779, "moons": 2, "year_length_years": 1.88},
+  {"name": "Jupiter", "distance_au": 5.2, "diameter_km": 139820, "moons": 95, "year_length_years": 11.86},
+  {"name": "Saturn", "distance_au": 9.54, "diameter_km": 116460, "moons": 146, "year_length_years": 29.46},
+  {"name": "Uranus", "distance_au": 19.2, "diameter_km": 50724, "moons": 28, "year_length_years": 84.01},
+  {"name": "Neptune", "distance_au": 30.06, "diameter_km": 49244, "moons": 16, "year_length_years": 164.8}
+]

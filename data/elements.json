@@ -1,0 +1,22 @@
+[
+  {"name": "Hydrogen", "symbol": "H", "atomic_number": 1, "atomic_mass": 1.008, "category": "nonmetal"},
+  {"name": "Helium", "symbol": "He", "atomic_number": 2, "atomic_mass": 4.0026, "category": "noble gas"},
+  {"name": "Lithium", "symbol": "Li", "atomic_number": 3, "atomic_mass": 6.94, "category": "alkali metal"},
+  {"name": "Beryllium", "symbol": "Be", "atomic_number": 4, "atomic_mass": 9.0122, "category": "alkaline earth metal"},
+  {"name": "Boron", "symbol": "B", "atomic_number": 5, "atomic_mass": 10.81, "category": "metalloid"},
+  {"name": "Carbon", "symbol": "C", "atomic_number": 6, "atomic_mass": 12.011, "category": "nonmetal"},
+  {"name": "Nitrogen", "symbol": "N", "atomic_number": 7, "atomic_mass": 14.007, "category": "nonmetal"},
+  {"name": "Oxygen", "symbol": "O", "atomic_number": 8, "atomic_mass": 15.999, "category": "nonmetal"},
+  {"name": "Fluorine", "symbol": "F", "atomic_number": 9, "atomic_mass": 18.998, "category": "halogen"},
+  {"name": "Neon", "symbol": "Ne", "atomic_number": 10, "atomic_mass": 20.18, "category": "noble gas"},
+  {"name": "Sodium", "symbol": "Na", "atomic_number": 11, "atomic_mass": 22.99, "category": "alkali metal"},
+  {"name": "Magnesium", "symbol": "Mg", "atomic_number": 12, "atomic_mass": 24.305, "category": "alkaline earth metal"},
+  {"name": "Aluminium", "symbol": "Al", "atomic_number": 13, "atomic_mass": 26.982, "category": "post-transition metal"},
+  {"name": "Silicon", "symbol": "Si", "atomic_number": 14, "atomic_mass": 28.085, "category": "metalloid"},
+  {"name": "Phosphorus", "symbol": "P", "atomic_number": 15, "atomic_mass": 30.974, "category": "nonmetal"},
+  {"name": "Sulfur", "symbol": "S", "atomic_number": 16, "atomic_mass": 32.06, "category": "nonmetal"},
+  {"name": "Chlorine", "symbol": "Cl", "atomic_number": 17, "atomic_mass": 35.45, "category": "halogen"},
+  {"name": "Argon", "symbol": "Ar", "atomic_number": 18, "atomic_mass": 39.95, "category": "noble gas"},
+  {"name": "Potassium", "symbol": "K", "atomic_number": 19, "atomic_mass": 39.098, "category": "alkali metal"},
+  {"name": "Calcium", "symbol": "Ca", "atomic_number": 20, "atomic_mass": 40.078, "category": "alkaline earth metal"}
+]

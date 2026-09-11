@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+ENV/
+env/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Build / Dist (PyInstaller)
+build/
+dist/
+*.spec
+builds.log
+build_info.json
+
+# App progress — per-user, not repo
+learning_progress.json
+learning_progress.json.bak
+*.bak
+
+# Generated view — source of truth is learn_python_gui.py (15k monolith)
+# Regenerate: python _archive_modular_before_single_file/generate_modules.py
+app/
+# keep the archived reference
+!_archive_modular_before_single_file/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+
+# Temp
+*.tmp
+*.log
+
+# Data — keep data/ but ignore local installs
+# (data/*.json are bundled — don't ignore)
