@@ -7,7 +7,7 @@ Run:
 
 What it does:
   - Starts the Tkinter app (learn_python_gui.py) with hot-reload enabled
-  - In parallel, starts watch_build.py which rebuilds dist/Lumixa/
+  - In parallel, starts watch_build.py which rebuilds dist/PolycodeCoach/
     on every save (so the frozen exe stays up to date without manual builds)
   - Press Ctrl+C in this terminal or close the GUI to stop both.
 
@@ -94,7 +94,7 @@ def main():
 
         watcher = None
         if not args.no_watch:
-            print("\n[1/2] Starting auto-rebuild watcher (dist/ will update on save)...")
+            print("\n[1/2] Starting auto-rebuild watcher (dist/PolycodeCoach/ will update on save)...")
             w_cmd = [sys.executable, str(ROOT / "watch_build.py")]
             if args.poll:
                 w_cmd.append("--poll")

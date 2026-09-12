@@ -157,10 +157,10 @@ Tough ones to plan around:
 
 - **🛝 Playground (Sandbox)** — a free, ungraded code editor for experimenting.
   Try anything here without affecting your progress.
-- **💡 Project Playground** — inside the Sandbox tab you'll find 20 ready-to-run
-  starter projects in five categories (🎲 Games, 📖 Stories, 🧮 Math, 🪄 Code
-  Tricks, 🛠 Real Tools). Pick a starting idea, hit **Load into Editor**, run it,
-  or press **🎲 Surprise Me** to get a random project. Every starter finishes
+- **💡 Project Playground** — inside the Sandbox tab you'll find 25 ready-to-run
+  starter projects in six categories (🎲 Games, 📖 Stories, 🧮 Math, 🪄 Code
+  Tricks, 🛠 Real Tools, 📝 Writing). Pick a starting idea, hit **Load into Editor**, run it,
+  or press **🎲 Surprise Me** to get a random project. Two `Writing` starters are **Code-It-First**: they do nothing until you fill the `TODO`s — then paste any sentence in `user_text` or the `Input` box and `Run` to see your fixer work. Every starter finishes
   with a "make it yours" list of fun ways to tweak it.
 - **🎉 Celebrations** — when you complete a lesson, or project, level up, or
   earn a new badge, the app celebrates with a confetti burst so you know you
@@ -201,9 +201,9 @@ python -m pytest tests -q
 python build.py
 ```
 
-This produces `dist/Lumixa/` containing `Lumixa.exe`, a
+This produces `dist/PolycodeCoach/` containing `PolycodeCoach.exe`, a
 `runtime/` Python interpreter (used by the sandbox), and a `run.bat` launcher.
-Progress is saved to `%APPDATA%\Lumixa\learning_progress.json`.
+Progress is saved to `%APPDATA%\PolycodeCoach\learning_progress.json` (user edition `lumixa.py` / `PolycodeCoach.exe`; dev edition `learn_python_gui.py` uses `%APPDATA%\Lumixa\learning_progress.json`).
 
 ## Auto-update while you code (no commands needed)
 
@@ -219,7 +219,7 @@ toast and the new content appears — no restart, no rebuild.
 - Works automatically, no flags needed
 - Disable with `python learn_python_gui.py --no-hot-reload`
 
-### 2) Auto-rebuild the frozen exe (dist/Lumixa)
+### 2) Auto-rebuild the frozen exe (dist/PolycodeCoach)
 
 For the distributable exe, use one of:
 
@@ -243,7 +243,7 @@ Details:
   (tune with `watch_build.py --debounce 1.0 --poll-interval 0.5`)
 - **Backends:** uses `watchdog` (native OS events) if installed
   (`pip install watchdog` for instant, low-CPU), otherwise efficient polling
-- **Output:** `dist/Lumixa/` (exe + runtime + data + languages)
+- **Output:** `dist/PolycodeCoach/` (exe + runtime + data + languages)
   plus `build_info.json` with timestamp/trigger; `builds.log` history
 - **If rebuild fails** (exe still running → Windows lock): close the app and
   save any file again to retry; watcher retries automatically

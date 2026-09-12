@@ -11120,7 +11120,7 @@ class WelcomePage(tk.Frame):
             ).pack(side="left")
 
             stats_row = tk.Frame(hero, bg=t["bg"])
-            stats_row.pack(anchor="w", pady=(0, SP["xl"]))
+            stats_row.pack(anchor="w", pady=(0, SP["md"]))
 
             # Use global count so quiz-skipped Beginner still shows as done
             try:
@@ -11138,6 +11138,84 @@ class WelcomePage(tk.Frame):
                          font=FONTS["stat_num"]).pack(anchor="w")
                 tk.Label(card, text=label, bg=t[bg_key], fg=t[fg_key],
                          font=FONTS["stat_label"]).pack(anchor="w")
+
+            # --- Retention nudge: streak status + what's next (no new language content) ---
+            try:
+                today = date.today().isoformat()
+                last = p.get("last_active_date", "")
+                streak = int(p.get("streak", 0) or 0)
+                freezes = int(p.get("streak_freezes", 0) or 0)
+                # Streak message
+                if not last:
+                    streak_msg = "Start your streak today \u2014 do one lesson, review, or daily!"
+                elif last == today:
+                    streak_msg = f"Streak alive! \U0001F525 {streak} day{'s' if streak!=1 else ''} \u2014 keep it going tomorrow."
+                else:
+                    try:
+                        gap = (date.today() - date.fromisoformat(last)).days
+                    except Exception:
+                        gap = 99
+                    if gap == 1:
+                        streak_msg = f"Streak at risk! \u26A1 {streak} days \u2014 do one thing today to keep it."
+                    elif gap > 1 and freezes > 0:
+                        streak_msg = f"Freeze saved you \u2744\uFE0F  {freezes} freeze{'s' if freezes!=1 else ''} left. Rebuild today!"
+                    elif gap > 1:
+                        streak_msg = "Streak reset yesterday. Start fresh today \u2014 one step counts!"
+                    else:
+                        streak_msg = f"\U0001F525 {streak} day streak"
+                # Due reviews + daily pending (lightweight, no heavy lesson load)
+                due_cnt = 0
+                try:
+                    lesson_sets_for_due = {}
+                    lp_frame = self.controller.frames.get(LearningPage) if hasattr(self.controller, "frames") else None
+                    if lp_frame is not None and getattr(lp_frame, "lesson_sets", None):
+                        lesson_sets_for_due = lp_frame.lesson_sets
+                    else:
+                        lang = current_language(p)
+                        lesson_sets_for_due = get_lesson_sets_for_language(lang) if lang in SUPPORTED_LANGUAGES else {}
+                    due_cnt = len(due_reviews(p, lesson_sets_for_due)) if lesson_sets_for_due else 0
+                except Exception:
+                    due_cnt = 0
+                daily_pending = False
+                try:
+                    dc = p.get("daily_challenge", {}) or {}
+                    solved = set(dc.get("solved_dates", []) or [])
+                    daily_pending = today not in solved
+                except Exception:
+                    daily_pending = True
+
+                nudge_bg = t["tip_bg"] if last == today else t["warning_bg"] if due_cnt or daily_pending else t["tip_bg"]
+                nudge_fg = t["tip_text"] if nudge_bg == t["tip_bg"] else t["warning"]
+                nudge = tk.Frame(hero, bg=nudge_bg, padx=SP["lg"], pady=SP["md"], bd=1, relief="solid")
+                nudge.pack(fill="x", pady=(SP["sm"], SP["md"]))
+                tk.Label(nudge, text=streak_msg, bg=nudge_bg, fg=nudge_fg, font=FONTS["body_bold"], anchor="w", justify="left", wraplength=520).pack(fill="x")
+                sub_parts = []
+                if due_cnt:
+                    sub_parts.append(f"\U0001F4DA {due_cnt} review{'s' if due_cnt!=1 else ''} due")
+                if daily_pending:
+                    sub_parts.append("\U0001F3AF Daily challenge ready (+8 XP)")
+                if not sub_parts:
+                    sub_parts.append("Pick one: Continue lesson, Daily, or Review \u2014 all keep your streak.")
+                tk.Label(nudge, text=" \u2022 ".join(sub_parts), bg=nudge_bg, fg=nudge_fg, font=FONTS["body_sm"], anchor="w", justify="left", wraplength=520).pack(fill="x", pady=(SP["xs"], 0))
+                # Quick actions — retention shortcut beats hunting menus
+                qa = tk.Frame(nudge, bg=nudge_bg)
+                qa.pack(fill="x", pady=(SP["sm"], 0))
+                def _go(page):
+                    return lambda: self.controller.show_frame(page)
+                # Primary: continue learning
+                b1 = tk.Button(qa, text="\u25B6 Continue", font=FONTS["button_sm"], command=_go(LearningPage), padx=SP["md"], pady=SP["xs"])
+                b1.pack(side="left", padx=(0, SP["xs"]))
+                style_button(b1, t, "accent", "accent_hover")
+                if due_cnt:
+                    b2 = tk.Button(qa, text=f"\U0001F4DA Review ({due_cnt})", font=FONTS["button_sm"], command=_go(ReviewQueuePage), padx=SP["md"], pady=SP["xs"])
+                    b2.pack(side="left", padx=(0, SP["xs"]))
+                    style_button(b2, t, "secondary_btn_bg", "secondary_btn_hover")
+                if daily_pending:
+                    b3 = tk.Button(qa, text="\U0001F3AF Daily", font=FONTS["button_sm"], command=_go(DailyChallengePage), padx=SP["md"], pady=SP["xs"])
+                    b3.pack(side="left")
+                    style_button(b3, t, "secondary_btn_bg", "secondary_btn_hover")
+            except Exception:
+                pass
 
         else:
             lang = current_language(p)
@@ -12322,6 +12400,7 @@ SANDBOX_CATEGORIES = [
     ("math",    "\U0001F9EE Math"),
     ("tricks",  "\U0001FA84 Tricks"),
     ("tools",   "\U0001F6E0 Tools"),
+    ("writing", "\U0001F4DD Writing"),
 ]
 
 SANDBOX_PROJECTS = [
@@ -12495,6 +12574,23 @@ SANDBOX_PROJECTS = [
         "sample_io": "3 + 4 = 7\n10 / 2 = 5.0\n5 * 6 = 30",
         "starter": "def calc(a, op, b):\n    if op == '+': return a + b\n    if op == '-': return a - b\n    if op == '*': return a * b\n    if op == '/': return a / b\n    return None\n\ntests = [(3, '+', 4), (10, '/', 2), (5, '*', 6), (9, '-', 3)]\nfor a, op, b in tests:\n    try:\n        print(f\"{a} {op} {b} = {calc(a, op, b)}\")\n    except ZeroDivisionError:\n        print(f\"{a} {op} {b} = Error (divide by zero)\")\n",
     },
+    # ---------------- Writing — Code-It-First (user must code before it works) ----------------
+    {
+        "category": "writing", "emoji": "\U0001F4DD", "title": "Grammar Fixer — Code It First",
+        "difficulty": 2,
+        "desc": "Paste any messy sentence — this fixer will clean it, but only after you code it. Load it and Run: you'll see it does nothing yet. Fix the TODOs to make it work. Works with the Input box below too.",
+        "fun": "Now try: add 'u'→'you', handle '?'/'!', or fix 'dont'→\"don't\" with a dict. Then type your own sentence in the Input box.",
+        "sample_io": "IN:  hello  i love python its teh best  \nOUT: Hello I love Python. It's the best.\nIN:  this is very good  \nOUT: This is excellent.",
+        "starter": "# Grammar Fixer — CODE IT FIRST (it does nothing until you fix the TODOs)\n# HOW TO USE:\n# 1) Load → Run → see OUT == IN (broken) + TODO hint.\n# 2) Fill the 4 TODOs inside fix_grammar() → Run → see clean OUT.\n# 3) Paste any sentence into user_text below OR type it in the 'Input for input()' box.\nimport re\n\n# Fix lists — add more words here after it works\nTYPO_FIX = {\"teh\": \"the\", \"its\": \"it's\", \"dont\": \"don't\", \"u\": \"you\", \"ur\": \"your\"}\nSYNONYM = {\"very good\": \"excellent\", \"really good\": \"excellent\", \"quick\": \"rapid\"}\n\ndef fix_grammar(text):\n    \"\"\"Clean one sentence: trim, fix typos, caps, punctuation.\"\"\"\n    # TODO 1 — collapse spaces:  text = re.sub(r'\\\\s+', ' ', text.strip())\n    # TODO 2 — fix typos word-by-word (hint):\n    #   words = []\n    #   for w in text.split():\n    #       core = re.sub(r'[^a-zA-Z]', '', w).lower()\n    #       w = TYPO_FIX.get(core, w)\n    #       words.append(w)\n    #   text = ' '.join(words)\n    # TODO 3 — standalone i -> I + capitalize first letter:\n    #   text = re.sub(r'\\\\bi\\\\b', 'I', text)\n    #   if text: text = text[0].upper() + text[1:]\n    # TODO 4 — ensure ends with . if no ?/!:\n    #   if text and text[-1] not in '.?!': text += '.'\n    # ↓ Starter returns input unchanged — delete this line after TODOs ↓\n    return text\n\ndef rephrase(text):\n    \"\"\"Swap dull phrases via SYNONYM dict.\"\"\"\n    # TODO: for k,v in SYNONYM.items():\n    #           if k in text.lower(): text = text.lower().replace(k, v)  # keep case simple\n    return text\n\n# --- harness: supports both hardcoded tests AND Input box ---\n# If you typed a sentence in the Input box, it will be used alone.\n# Otherwise the 3 demo tests below run so you can see progress instantly.\ntry:\n    _maybe = input().strip()  # from Input box (one line per input() call)\nexcept Exception:\n    _maybe = \"\"\n# Also support pasting into variable\nuser_text = \"hello  i love python its teh best\"  # <-- paste any messy sentence here\nif _maybe:\n    tests = [_maybe]\nelse:\n    tests = [user_text, \"this is very good\", \"  dont be quick  \"]\nfor t in tests:\n    out = rephrase(fix_grammar(t))\n    print(f\"IN:  {t}\")\n    print(f\"OUT: {out}\")\n    if out.strip() == t.strip():\n        print(\"  -> TODO: code fix_grammar()/rephrase() above, then Run again\")\n    print()\n",
+    },
+    {
+        "category": "writing", "emoji": "\u2728", "title": "Rephrase Lab — Code It First",
+        "difficulty": 2,
+        "desc": "Give it a dull sentence, get back a brighter one — after you code the rephraser. Input box works here too.",
+        "fun": "Now try: add 5 more synonyms, shuffle word order, or add a formal/casual toggle. Try typing in Input box.",
+        "sample_io": "IN: The quick fox is very good\nOUT: The rapid fox is excellent (synonyms swapped)",
+        "starter": "# Rephrase Lab — CODE IT FIRST (+ Input box support)\n# Load→Run = no change (stub). Code it → vivid rephrase. Type a sentence in Input box to test your own.\nimport random\n\nSYNONYMS = {\n    \"very good\": [\"excellent\", \"fantastic\", \"superb\"],\n    \"quick\": [\"rapid\", \"swift\", \"speedy\"],\n    \"happy\": [\"joyful\", \"cheerful\", \"delighted\"],\n    \"said\": [\"exclaimed\", \"noted\", \"shared\"],\n}\nSTYLE = {\"formal\": \"Furthermore, \", \"casual\": \"So, \"}\n\ndef rephrase(text, style=\"casual\"):\n    \"\"\"TODO: replace each key with a random synonym + prepend style.\"\"\"\n    # TODO 1: result = text\n    # TODO 2: for key, opts in SYNONYMS.items():\n    #            if key in result.lower():\n    #                result = re.sub(key, random.choice(opts), result, flags=re.I)\n    # TODO 3: return STYLE.get(style, \"\") + result\n    return text  # <-- delete after TODOs\n\n# --- harness: Input box or variable ---\ntry:\n    _maybe = input().strip()\nexcept Exception:\n    _maybe = \"\"\nuser_sentence = _maybe if _maybe else \"the quick fox is very good and happy\"  # <-- edit me or use Input box\nimport re\nfor sty in [\"casual\", \"formal\"]:\n    print(f\"[{sty}] {rephrase(user_sentence, sty)}\")\nprint()\nif rephrase(user_sentence) == user_sentence:\n    print(\"If output == input, your rephrase() is still the stub — fill the TODOs and Run.\")\n",
+    },
 ]
 
 # Backfill sample I/O for older projects without it (so every card shows preview)
@@ -12506,6 +12602,29 @@ for _pr in SANDBOX_PROJECTS:
 
 SANDBOX_PROJECTS_JAVA = [{'category': 'games', 'emoji': '🎯', 'title': 'Guess My Number (Java)', 'difficulty': 1, 'desc': 'Computer picks 1-50 and binary-searches it. Watch Java nail it in ≤6 guesses.', 'fun': 'Now try: change 50 to 500, print low/high each turn, or count average guesses over 1000 runs.', 'starter': 'import java.util.Random;\npublic class Main {\n    public static void main(String[] args) {\n        Random r = new Random();\n        int target = r.nextInt(50) + 1;\n        int low = 1, high = 50, guesses = 0;\n        while (low <= high) {\n            guesses++;\n            int guess = (low + high) / 2;\n            System.out.println("Guess #" + guesses + ": " + guess);\n            if (guess == target) { System.out.println("Found " + target + " in " + guesses + " guesses!"); break; }\n            else if (guess < target) low = guess + 1;\n            else high = guess - 1;\n        }\n    }\n}\n'}, {'category': 'games', 'emoji': '✂️', 'title': 'Rock-Paper-Scissors (Java)', 'difficulty': 1, 'desc': '12 rounds of Java Rock-Paper-Scissors vs the bot. Random picks, beats map, score track.', 'fun': 'Now try: add Lizard/Spock, track longest streak, or stop when someone leads by 3.', 'starter': 'import java.util.*;\npublic class Main {\n    public static void main(String[] args) {\n        String[] moves = {"Rock","Paper","Scissors"};\n        Map<String,String> beats = Map.of("Rock","Scissors","Paper","Rock","Scissors","Paper");\n        String[] you = {"Rock","Paper","Scissors","Rock","Paper","Scissors","Rock","Paper","Scissors","Rock","Paper","Scissors"};\n        int youWins=0, botWins=0; Random r=new Random();\n        for(String my: you){ String bot=moves[r.nextInt(3)]; System.out.println("You: "+my+" vs Bot: "+bot); if(beats.get(my).equals(bot)){youWins++; System.out.println("  You win!");} else if(beats.get(bot).equals(my)){botWins++; System.out.println("  Bot wins!");} else System.out.println("  Tie.");}\n        System.out.println("Final - You: "+youWins+" Bot: "+botWins);\n    }\n}\n'}, {'category': 'games', 'emoji': '🎰', 'title': 'Slot Machine (Java)', 'difficulty': 1, 'desc': 'Spin 3 reels 5 times. Jackpot on triple match +5 coins, else -1.', 'fun': 'Now try: add 7 that pays triple, count diagonal wins, or spin until bank 0.', 'starter': 'import java.util.Random;\npublic class Main {\n    public static void main(String[] args) {\n        Random r=new Random(); int bank=10;\n        for(int spin=0; spin<5; spin++){ int a=r.nextInt(10), b=r.nextInt(10), c=r.nextInt(10);\n            if(a==b && b==c){ bank+=5; System.out.println("Spin "+(spin+1)+": ["+a+" "+b+" "+c+"] JACKPOT! bank="+bank);}\n            else{ bank-=1; System.out.println("Spin "+(spin+1)+": ["+a+" "+b+" "+c+"] no luck, bank="+bank);}\n        }\n    }\n}\n'}, {'category': 'stories', 'emoji': '📖', 'title': 'Mad Libs (Java)', 'difficulty': 1, 'desc': 'Random nouns/adjectives/places stitch 3 silly stories. Java Random + String.format.', 'fun': 'Now try: add verbs, make 2-paragraph story, or add titles.', 'starter': 'import java.util.*;\npublic class Main {\n    public static void main(String[] args) {\n        String[] names={"Ada","Lin","Kai","Zoe"}; String[] adjs={"grumpy","sparkling","gigantic","sneaky"};\n        String[] things={"laser pointer","guitar","goldfish","rocket"}; String[] places={"a pirate ship","the moon","an old library","the kitchen"};\n        Random r=new Random();\n        for(int i=0;i<3;i++){\n            System.out.println("Once upon a time, "+names[r.nextInt(names.length)]+" the "+adjs[r.nextInt(adjs.length)]);\n            System.out.println("  carried "+things[r.nextInt(things.length)]+" into "+places[r.nextInt(places.length)]+"."); System.out.println();\n        }\n    }\n}\n'}, {'category': 'stories', 'emoji': '🤖', 'title': 'Robot Diner (Java)', 'difficulty': 2, 'desc': 'Customers complain, robot waiter replies from a bank. Java Map for keyword replies.', 'fun': 'Now try: match keyword to reply, add noise, or make robot crack.', 'starter': 'import java.util.*;\npublic class Main {\n    public static void main(String[] args) {\n        String[] customers={"We ordered ten minutes ago!","Is this decaf?","Extra pickles?","Invisible donuts?"};\n        String[] replies={"Kitchen is busy!","Experimental decaf only.","Checking pickle reserve.","Invisible donuts are popular."};\n        Random r=new Random();\n        for(String line: customers){ System.out.println("Customer: "+line); System.out.println("WaiterBot: "+replies[r.nextInt(replies.length)]); System.out.println(); }\n    }\n}\n'}, {'category': 'math', 'emoji': '🔢', 'title': 'Fibonacci (Java)', 'difficulty': 1, 'desc': 'Java Fibonacci: a,b = 0,1 loop 15. Classic recursion gateway.', 'fun': 'Now try: print evens only, go backwards from 610, or fib(n) method.', 'starter': 'public class Main {\n    public static void main(String[] args) {\n        int a=0,b=1;\n        for(int i=0;i<15;i++){ System.out.print(a+"  "); int next=a+b; a=b; b=next; }\n        System.out.println(""); System.out.println("Fibonacci done.");\n    }\n}\n'}, {'category': 'math', 'emoji': '🔍', 'title': 'Prime Hunt (Java)', 'difficulty': 2, 'desc': 'Sieve of Eratosthenes to 60 in Java. Cross multiples, keep primes.', 'fun': 'Now try: 5 per row, last prime before 1000, or twin primes.', 'starter': 'import java.util.*;\npublic class Main {\n    public static void main(String[] args) {\n        int limit=60; int[] nums=new int[limit+1]; for(int i=0;i<=limit;i++) nums[i]=i; nums[0]=0; nums[1]=0;\n        for(int i=2;i*i<=limit;i++) if(nums[i]!=0) for(int j=i*i;j<=limit;j+=i) nums[j]=0;\n        System.out.print("Primes up to 60: "); for(int n: nums) if(n!=0) System.out.print(n+" "); System.out.println();\n    }\n}\n'}, {'category': 'math', 'emoji': '🌀', 'title': 'Collatz (Java)', 'difficulty': 3, 'desc': 'Collatz: halve even, 3n+1 odd. Watch 27 hit 1 in 111 steps (Java).', 'fun': 'Now try: longest chain under 100, or table of steps.', 'starter': 'public class Main {\n    public static void main(String[] args) {\n        int n=27, steps=0; System.out.println("Collatz from 27:");\n        while(n!=1){ System.out.print(n+" -> "); n=(n%2==0)? n/2 : n*3+1; steps++; }\n        System.out.println(1); System.out.println(steps+" steps to 1.");\n    }\n}\n'}, {'category': 'tricks', 'emoji': '🔐', 'title': 'Caesar Cipher (Java)', 'difficulty': 2, 'desc': 'Shift letters by key in Java. Print at 3 keys, see meaning wobble.', 'fun': 'Now try: brute-force 26 keys, decode, or shift only inside words.', 'starter': 'public class Main {\n    static String shift(String text,int n){ StringBuilder sb=new StringBuilder(); for(char ch: text.toCharArray()){ if(Character.isLetter(ch)){ char base=Character.isUpperCase(ch)?\'A\':\'a\'; sb.append((char)((ch-base+n)%26+base)); } else sb.append(ch); } return sb.toString(); }\n    public static void main(String[] args){ String msg="Hello, Java!"; for(int k=1;k<4;k++) System.out.println("key "+k+": "+shift(msg,k)); }\n}\n'}, {'category': 'tricks', 'emoji': '🛡️', 'title': 'Password Forge (Java)', 'difficulty': 1, 'desc': 'Random 14-char password from letters+digits+symbols in Java.', 'fun': 'Now try: guarantee one of each type, passphrase from words, or strength check.', 'starter': 'import java.util.Random;\npublic class Main {\n    public static void main(String[] args){ String chars="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"; Random r=new Random(); StringBuilder sb=new StringBuilder(); for(int i=0;i<14;i++) sb.append(chars.charAt(r.nextInt(chars.length()))); System.out.println("Password: "+sb); System.out.println("Length: "+sb.length()); }\n}\n'}, {'category': 'tools', 'emoji': '🗓️', 'title': 'Date Detective (Java)', 'difficulty': 1, 'desc': 'java.time shows today, +100 and +1000 days with day names (Java).', 'fun': 'Now try: next Friday 13th, days until birthday, or weekday born.', 'starter': 'import java.time.*;\npublic class Main {\n    public static void main(String[] args){ LocalDate today=LocalDate.now(); System.out.println("Today: "+today+" "+today.getDayOfWeek()); System.out.println("+100: "+today.plusDays(100)+" "+today.plusDays(100).getDayOfWeek()); System.out.println("+1000: "+today.plusDays(1000)); }\n}\n'}, {'category': 'tools', 'emoji': '📊', 'title': 'Stats Bot (Java)', 'difficulty': 1, 'desc': 'Mean/median/mode via Java streams on a score list.', 'fun': 'Now try: drop lowest, random scores, or range (max-min).', 'starter': 'import java.util.*;\npublic class Main {\n    public static void main(String[] args){ List<Integer> scores=Arrays.asList(88,92,75,90,88,77,95); double mean=scores.stream().mapToInt(Integer::intValue).average().orElse(0); List<Integer> sorted=new ArrayList<>(scores); Collections.sort(sorted); double median=sorted.get(sorted.size()/2); System.out.println("Scores: "+scores); System.out.println("Mean: "+mean); System.out.println("Median: "+median); }\n}\n'}]
 
+
+# --- Writing — Code-It-First (Java mirrors Python Writing lab) ---
+try:
+    SANDBOX_PROJECTS_JAVA.extend([
+        {
+            "category": "writing", "emoji": "\U0001F4DD", "title": "Grammar Fixer — Code It First (Java)",
+            "difficulty": 2,
+            "desc": "Paste any messy sentence — this fixer will clean it, but only after you code it. Load -> Run = no change. Fill TODOs to make it work.",
+            "fun": "Now try: add 'u'->'you', handle '?'/'!', or fix 'dont'->\"don't\" with a map.",
+            "sample_io": "IN:  hello  i love java its teh best  \nOUT: Hello I love Java. It's the best.",
+            "starter": "import java.util.*;\npublic class Main {\n    static Map<String,String> TYPO = Map.of(\"teh\",\"the\",\"its\",\"it's\",\"dont\",\"don't\");\n    // TODO: code fixGrammar — it currently returns input unchanged\n    static String fixGrammar(String text) {\n        // TODO 1: text = text.trim().replaceAll(\"\\\\s+\", \" \");\n        // TODO 2: split, fix typos via TYPO map, rejoin\n        // TODO 3: fix standalone i -> I, capitalize first letter\n        // TODO 4: ensure ends with '.' if no ?/!\n        return text; // <-- replace after TODOs\n    }\n    public static void main(String[] args) {\n        String user = \"hello  i love java its teh best\";\n        String[] tests = {user, \"this is very good\", \"  dont be quick  \"};\n        for (String t: tests) {\n            String out = fixGrammar(t);\n            System.out.println(\"IN:  \" + t);\n            System.out.println(\"OUT: \" + out);\n            if (out.trim().equals(t.trim())) System.out.println(\"  -> TODO: code fixGrammar() above, then Run again\");\n            System.out.println();\n        }\n    }\n}\n",
+        },
+        {
+            "category": "writing", "emoji": "\u2728", "title": "Rephrase Lab — Code It First (Java)",
+            "difficulty": 2,
+            "desc": "Dull sentence -> vivid sentence — after you code the rephraser. Synonyms + style.",
+            "fun": "Now try: add 5 more synonyms, shuffle word order, or toggle formal/casual.",
+            "sample_io": "IN: The quick fox is very good\nOUT: The rapid fox is excellent",
+            "starter": "import java.util.*;\npublic class Main {\n    static Map<String,String[]> SYNS = Map.of(\"very good\", new String[]{\"excellent\",\"fantastic\"}, \"quick\", new String[]{\"rapid\",\"swift\"});\n    static String rephrase(String text) {\n        // TODO: for (var e: SYNS.entrySet()) if (text.toLowerCase().contains(e.getKey())) text = text.replace(e.getKey(), e.getValue()[0]);\n        return text; // <-- replace\n    }\n    public static void main(String[] args) {\n        String s = \"the quick fox is very good\";\n        System.out.println(rephrase(s));\n        System.out.println(\"If output == input, rephrase() is still stub — fill TODOs.\");\n    }\n}\n",
+        },
+    ])
+except Exception:
+    pass
 
 def _difficulty_dots(n):
     return "\u25CF" * n + "\u25CB" * (3 - n)
@@ -12570,10 +12689,12 @@ class SandboxPage(tk.Frame):
         cat_row.pack(fill="x", padx=SP["md"], pady=(SP["sm"], 0))
         self._selected_cat = tk.StringVar(value=SANDBOX_CATEGORIES[0][0])
         self._cat_by_key = {}
-        for key, label in SANDBOX_CATEGORIES:
+        # Grid 3 per row so 6 categories (now with Writing) wrap cleanly on 340px panel
+        for idx, (key, label) in enumerate(SANDBOX_CATEGORIES):
             b = tk.Button(cat_row, text=label, font=FONTS["button_sm"],
                           command=lambda k=key: self._pick_category(k, t))
-            b.pack(side="left", padx=(0, SP["xs"]))
+            b.grid(row=idx // 3, column=idx % 3, padx=(0, SP["xs"]), pady=(SP["xs"]//2, 0), sticky="ew")
+            cat_row.grid_columnconfigure(idx % 3, weight=1)
             self._cat_by_key[key] = b
         self._style_cats(t)
 

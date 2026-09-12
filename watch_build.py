@@ -9,8 +9,8 @@ Leave this running in a terminal while you edit code:
 It watches the project's .py files recursively (including languages/),
 data/*.json, and lesson_data.py. Each time you save, it waits ~2 seconds
 (debounce so you can finish typing), then runs build.py automatically.
-When it finishes, the app in dist/Lumixa is up to date and
-you can just double-click Lumixa.exe - no commands needed.
+When it finishes, the app in dist/PolycodeCoach is up to date and
+you can just double-click PolycodeCoach.exe - no commands needed.
 
 Backend:
   - If `watchdog` is installed (`pip install watchdog`) it uses native
@@ -329,7 +329,7 @@ def build_app(changed: list) -> None:
     # Stream output in real time
     proc = subprocess.run(cmd, cwd=ROOT, check=False)
     if proc.returncode == 0:
-        print("\n  ✓ App is updated. Open dist/Lumixa/Lumixa.exe")
+        print("\n  ✓ App is updated. Open dist/PolycodeCoach/PolycodeCoach.exe")
         print("    to use the new version (close the app first if it's running).")
         print(f"  [{datetime.now().strftime('%H:%M:%S')}] Watching for next change...\n")
     else:
@@ -359,7 +359,7 @@ def main():
     print("  ", ROOT)
     print(f"Save any .py (including languages/) or data/*.json and the app")
     print(f"will rebuild itself (~{stable:.1f}s debounce), then you can")
-    print("open dist/Lumixa/Lumixa.exe instead of using commands.")
+    print("open dist/PolycodeCoach/PolycodeCoach.exe instead of using commands.")
     # Show ignored hint
     if verbose:
         print(f"\nIgnored dirs: {', '.join(sorted(IGNORED_DIRS))}")
@@ -375,9 +375,9 @@ def main():
         changed = changed_names(before, after)
         if not changed:
             # Also check if dist missing -> force build
-            dist_exe = ROOT / "dist" / "Lumixa" / "Lumixa.exe"
+            dist_exe = ROOT / "dist" / "PolycodeCoach" / "PolycodeCoach.exe"
             if not dist_exe.is_file():
-                print("  dist/Lumixa/Lumixa.exe missing -> building now.")
+                print("  dist/PolycodeCoach/PolycodeCoach.exe missing -> building now.")
                 build_app(["initial build (dist missing)"])
             else:
                 print("  No changes detected. Nothing to build.")

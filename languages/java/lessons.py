@@ -1238,7 +1238,7 @@ def build_lesson_sets():
                         "5. In main, call each and println the result (e.g. println(add(5,3)))",
                         "Expected: Results of all four operations",
                     ],
-                    "starter_code": "// Build your Calculator - add methods above main\npublic class Main {\n    public static int add(int a, int b) {\n        return a + b;\n    }\n    // TODO: subtract, multiply, divide above main\n    public static void main(String[] args) {\n        // Test each method with println here\n    }\n}\n",
+                    "starter_code": "// Build your Calculator - add methods above main\npublic class Main {\n    public static int add(int a, int b) {\n        return a + b;\n    }\n    // Add subtract, multiply, divide above main\n    public static void main(String[] args) {\n        // Test each method with println here\n        // e.g. System.out.println(add(5,3));\n    }\n}\n",
                     "check": lambda code: (
                         True, "Perfect! You built reusable static methods."
                     ) if (code.count("public static") >= 3 and "return" in code) else (
@@ -1474,7 +1474,7 @@ def build_lesson_sets():
                         "4. Print each with System.out.println(p.describe()); - two lines expected",
                         "Expected: Two description lines like Milo is 3 years old",
                     ],
-                    "starter_code": "// Build your Pet Registry - class outside, objects inside main\nclass Pet {\n    String name;\n    int age;\n    Pet(String n, int a){ this.name=n; this.age=a; }\n    // TODO: String describe() { return ... } here\n}\npublic class Main {\n    public static void main(String[] args) {\n        // Create two Pets and println their describe() here\n    }\n}\n",
+                    "starter_code": "// Build your Pet Registry - class outside, objects inside main\nclass Pet {\n    String name;\n    int age;\n    Pet(String n, int a){ this.name=n; this.age=a; }\n    // Add String describe() { return ... } here\n}\npublic class Main {\n    public static void main(String[] args) {\n        // Create two Pets and println their describe() here\n        // e.g. Pet p1 = new Pet(\"Milo\", 3); System.out.println(p1.describe());\n    }\n}\n",
                     "check": lambda code: (
                         True, "Great OOP! You built a class, constructor, and instance methods."
                     ) if ("class Pet" in code and "new Pet" in code and "describe" in code and code.count("System.out.println") >= 2) else (

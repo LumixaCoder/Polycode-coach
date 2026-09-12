@@ -1,6 +1,6 @@
 # CODEMAP — Polycode Coach
 
-> **One file, 15,387 lines, 32 sections.** Use this map + `Ctrl+F SECTION XX` to jump.
+> **One file, ~17,130 lines, 32 sections.** Use this map + `Ctrl+F SECTION XX` to jump.
 > Every `SECTION` banner lists `Original: app/...` so you can grep either way.
 
 ## How to look through the code (3 ways)
@@ -11,8 +11,8 @@
 ```
 learn_python_gui.py
   ├─ 00   IMPORTS           ~66
-  ├─ 00b  LESSON DATA        91  build_lesson_sets() — 37 lessons (9/9/19) embedded; fallback lesson_data.py
-  ├─ 01   LANGUAGE REGISTRY 3802  SUPPORTED_LANGUAGES, LANGUAGE_META, get_lesson_sets_for_language()
+  ├─ 00b  LESSON DATA        91  build_lesson_sets() — 37 lessons (9/9/19) embedded; canonical now languages/python/lessons.py, lesson_data.py is shim
+  ├─ 01   LANGUAGE REGISTRY 3802  SUPPORTED_LANGUAGES, LANGUAGE_META, get_lesson_sets_for_language() — prefers languages/<id>/lessons.py via importlib
   ├─ 02   THEMES & FONTS    3873  THEMES (light/dark/ocean/forest), FONTS, SP, rebuild_fonts()
   ├─ 03   PROGRESS          4258  save/load_progress (atomic .tmp), default/ensure, streak, heatmap, weekly
   ├─ 04   GAMIFICATION      4684  BADGES 23, award_xp, newly_awarded_badges, daily_xp_series
@@ -37,7 +37,7 @@ learn_python_gui.py
   ├─ 21   Result           10842  ResultPage — _is_correct()
   ├─ 22   Progress         11016  ProgressPage — roadmap, heatmap, weekly bar
   ├─ 23   Badges           11413  BadgesPage
-  ├─ 24   Sandbox          11567  SandboxPage — 23 starters + inputs
+  ├─ 24   Sandbox          11567  SandboxPage — 25 starters (6 cats incl Writing Code-It-First) + inputs
   ├─ 25   CoachPanel       12081  CoachPanel widget
   ├─ 26   Review Queue     12310  ReviewQueuePage
   ├─ 27   Skill Tree       12458  SkillTreePage (canvas path)
@@ -83,7 +83,8 @@ def _export_progress(self):
 
 ## Where to edit
 
-- **Lessons:** `SECTION 00b:91` `build_lesson_sets()` — or `languages/python/lessons.py` (dynamic import preferred)
+- **Lessons (Python):** `languages/python/lessons.py:1` `build_lesson_sets()` — **canonical** (37 lessons: 9/9/19). `lesson_data.py:1` is shim that re-exports it. `SECTION 00b:91` embedded copy is fallback only (auto-synced).
+- **Lessons (Java):** `languages/java/lessons.py:1` `build_lesson_sets()` — 36 Java lessons (9/9/18) — keep in sync with Python track where possible (Python has +1 Advanced lesson: e.g. tkinter/GUI track not yet ported)
 - **New theme:** `SECTION 02:3873` add to `THEMES` + `FONTS`
 - **New badge:** `SECTION 04:4684` `BADGES` list (23 today)
 - **New setting toggle:** `SECTION 29:13165` `SettingsPage` — copy `_sound_card`/`_backup_card` pattern
@@ -102,4 +103,4 @@ python -m py_compile learn_python_gui.py
 python -m pytest tests -q   # 153 passed
 ```
 
-*Generated 2026-09-09 — lines pinned from `map_sec.py` audit.*
+*Updated 2026-09-12 — Writing lab added (Grammar Fixer + Rephrase Lab Code-It-First, Input-box aware, 25 starters/6 cats), canonical Python lessons moved to languages/python/lessons.py, build output unified to dist/PolycodeCoach. Audit 17,130 lines.*
