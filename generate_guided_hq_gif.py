@@ -25,6 +25,14 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
 from pathlib import Path
 from PIL import Image, ImageGrab, ImageDraw, ImageFont, ImageFilter, ImageEnhance
+# DPI awareness for Windows — ensures winfo_rootx matches ImageGrab physical pixels
+try:
+    import ctypes
+    try: ctypes.windll.shcore.SetProcessDpiAwareness(2)  # Per-monitor DPI aware
+    except: 
+        try: ctypes.windll.shcore.SetProcessDpiAwareness(1)
+        except: ctypes.windll.user32.SetProcessDPIAware()
+except: pass
 
 ROOT = Path(__file__).resolve().parent
 PROGRESS = ROOT / "learning_progress.json"
@@ -536,7 +544,7 @@ def main():
     # Disable welcome help popup for clean recording
     try: app.progress["show_welcome_help"] = False
     except: pass
-    # Center window
+    # Center window — keep topmost ON for entire capture so VS Code never covers it
     try:
         app.geometry("1060x740")
         app.update()
@@ -547,15 +555,29 @@ def main():
         x = max(0,x); y = max(0,y)
         app.geometry(f"{w}x{h}+{x}+{y}")
         app.deiconify(); app.lift()
+        try: app.focus_force()
+        except: pass
         app.attributes("-topmost", True)
         app.update()
-        app.after(500, lambda: app.attributes("-topmost", False))
+        # Do NOT drop topmost — keep it pinned above VS Code the whole tour
+        # Re-assert every 400ms for first 2s to beat window manager
+        for _ in range(5):
+            app.lift(); app.attributes("-topmost", True); app.update(); time.sleep(0.15)
         for _ in range(22):
             app.update()
             if app.winfo_viewable() and app.winfo_width() > 300:
                 break
             time.sleep(0.12)
         time.sleep(0.9)
+        # Verify we have focus before warmup
+        try:
+            import ctypes
+            hwnd = ctypes.windll.user32.GetForegroundWindow()
+            # SetForegroundWindow for Tk hwnd
+            try: ctypes.windll.user32.SetForegroundWindow(app.winfo_id())
+            except: pass
+        except: pass
+        app.lift(); app.attributes("-topmost", True); app.update()
     except Exception as e:
         print(f"[warn] window setup {e}")
 
@@ -606,9 +628,10 @@ def main():
     # Helper to capture with guided overlay
     # Uses closure over frames/durations/labels
     def cap(label, *, cursor_frac=None, callout=None, callout_sub=None, dur=None, click=False, finder=None):
-        # Allows finder to override cursor_frac with precise pixel
-        app.update_idletasks(); app.update()
-        time.sleep(0.14)
+        # Always re-assert topmost before each grab so VS Code never bleeds in
+        try: app.lift(); app.attributes("-topmost", True); app.update_idletasks(); app.update()
+        except: pass
+        time.sleep(0.12)
         img = grab_clean(app)
         used_synthetic = False
         if img is None or is_black(img):
