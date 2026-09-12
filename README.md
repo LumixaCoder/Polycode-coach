@@ -1,7 +1,7 @@
 # Polycode Coach — Code Learning Coach
 
 ![demo](demo.gif)
-<p align="center"><em>Full tour (22s): Cold start → Pick Python → Welcome → Placement Quiz → Result (Beginner) → Learning: Concept → Practice (type → Run → +5 XP) → Final Project → Progress (XP/streak) → Skill Tree → Review → Drills → Daily Challenge → Sandbox (run output) → Badges → Settings → Planning Guide</em></p>
+<p align="center"><em>Full guided tour (32s, 900px, 28 frames) — Cold start → Pick Python → Welcome → Placement Quiz → Result (Beginner) → Learning: Concept → Practice (type → Run → +5 XP) → Debug (broken → Coach hint → Fix +8 XP) → Final Project → Progress (XP/streak/heatmap) → Skill Tree → Review → Drills → Daily Challenge → Sandbox Cards → Sandbox Run (output) → Badges → Settings → Planning Guide — cursor + callouts, global palette</em></p>
 
 A Tkinter app that assesses your level in Python & Java, then walks you through
 interactive lessons with hands-on code practice, quizzes, final projects,
