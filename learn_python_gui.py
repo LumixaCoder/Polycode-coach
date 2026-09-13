@@ -12758,10 +12758,15 @@ class SandboxPage(tk.Frame):
         self._proj_list.bind("<<ListboxSelect>>", lambda _e: self._show_info(t))
         self._proj_list.bind("<Double-Button-1>", lambda _e: self._load_selected())
 
-        self._info = tk.Text(ideas, height=8, font=FONTS["body_sm"], bg=t["card"],
+        info_frame = tk.Frame(ideas, bg=t["card"])
+        info_frame.pack(fill="both", expand=True, padx=SP["md"], pady=(SP["sm"], 0))
+        self._info = tk.Text(info_frame, height=8, font=FONTS["body_sm"], bg=t["card"],
                              fg=t["text_secondary"], relief="flat", wrap="word",
                              state="disabled", cursor="arrow")
-        self._info.pack(fill="both", expand=True, padx=SP["md"], pady=(SP["sm"], 0))
+        info_y = tk.Scrollbar(info_frame, orient="vertical", command=self._info.yview)
+        self._info.configure(yscrollcommand=info_y.set)
+        info_y.pack(side="right", fill="y")
+        self._info.pack(side="left", fill="both", expand=True)
 
         btn_row = tk.Frame(ideas, bg=t["card"])
         btn_row.pack(fill="x", padx=SP["md"], pady=(SP["sm"], SP["md"]))
@@ -12779,14 +12784,51 @@ class SandboxPage(tk.Frame):
         self._populate_list()
         self._show_info(t)
 
-        # ---------- Editor (right, top) ----------
-        tk.Label(top, text="Your Code", bg=t["bg"], fg=t["muted"],
-                 font=FONTS["heading_sm"], anchor="w").pack(anchor="w", padx=SP["lg"], pady=SP["sm"])
-
-        editor = SyntaxEditor(top, theme=t, height=12, font=FONTS["code"],
+        # ---------- Editor (right, top) — auto-fit + scroll toggle ----------
+        hdr_row = tk.Frame(top, bg=t["bg"])
+        hdr_row.pack(fill="x", padx=SP["lg"], pady=(SP["sm"], 0))
+        tk.Label(hdr_row, text="Your Code", bg=t["bg"], fg=t["muted"],
+                 font=FONTS["heading_sm"], anchor="w").pack(side="left")
+        # Wrap toggle — auto-fit width (wrap=word) vs horizontal scroll (wrap=none)
+        _prev_wrap = bool(p.get("sandbox_wrap", False))
+        try:
+            if hasattr(self, "_wrap_var") and self._wrap_var is not None:
+                _prev_wrap = bool(self._wrap_var.get())
+        except Exception:
+            pass
+        self._wrap_var = tk.BooleanVar(value=_prev_wrap)
+        p["sandbox_wrap"] = bool(self._wrap_var.get())
+        editor_frame = tk.Frame(top, bg=t["bg"])
+        editor_frame.pack(fill="both", expand=True, padx=SP["lg"], pady=(0, SP["sm"]))
+        initial_wrap = "word" if self._wrap_var.get() else "none"
+        editor = SyntaxEditor(editor_frame, theme=t, height=12, font=FONTS["code"],
                               bg=t["input_bg"], fg=t["text"], insertbackground=t["text"],
-                              relief="solid", bd=1, undo=True, wrap="none")
-        editor.pack(fill="both", expand=True, padx=SP["lg"], pady=(0, SP["sm"]))
+                              relief="solid", bd=1, undo=True, wrap=initial_wrap)
+        y_scroll = tk.Scrollbar(editor_frame, orient="vertical", command=editor.yview)
+        x_scroll = tk.Scrollbar(editor_frame, orient="horizontal", command=editor.xview)
+        editor.configure(yscrollcommand=y_scroll.set, xscrollcommand=x_scroll.set)
+        y_scroll.pack(side="right", fill="y")
+        if initial_wrap == "none":
+            x_scroll.pack(side="bottom", fill="x")
+        editor.pack(side="left", fill="both", expand=True)
+        def _toggle_wrap():
+            wrap = "word" if self._wrap_var.get() else "none"
+            try:
+                editor.configure(wrap=wrap)
+                if wrap == "word":
+                    try: x_scroll.pack_forget()
+                    except Exception: pass
+                else:
+                    x_scroll.pack(side="bottom", fill="x")
+                p["sandbox_wrap"] = bool(self._wrap_var.get())
+                save_progress(self.controller.progress_path, p)
+                try:
+                    show_toast(self.winfo_toplevel(), "Wrap ON — auto-fit width" if wrap=="word" else "Wrap OFF — horizontal scroll", t)
+                except Exception: pass
+            except Exception: pass
+        wrap_cb = tk.Checkbutton(hdr_row, text="↔ Wrap", variable=self._wrap_var, command=_toggle_wrap, bg=t["bg"], fg=t["text"], selectcolor=t["panel"], activebackground=t["bg"], font=FONTS["caption"], highlightthickness=0, bd=0)
+        wrap_cb.pack(side="right")
+        tk.Label(hdr_row, text="scroll ↔ / ↕", bg=t["bg"], fg=t["muted"], font=FONTS["caption"]).pack(side="right", padx=(0, SP["xs"]))
         # Language-aware default: Java learners see a Java template, not Python
         _java_default = "public class Main {\n    public static void main(String[] args) {\n        System.out.println(\"Hello Java!\");\n        System.out.println(42);\n    }\n}\n"
         _starter = p.get("sandbox_code")
@@ -12826,9 +12868,14 @@ class SandboxPage(tk.Frame):
         input_frame.pack(fill="x", padx=SP["lg"], pady=(SP["xs"], 0))
         tk.Label(input_frame, text="Input for input()  (one line per call, optional):",
                  bg=t["bg"], fg=t["muted"], font=FONTS["caption"], anchor="w").pack(anchor="w")
-        input_box = tk.Text(input_frame, height=2, font=FONTS["code_sm"], bg=t["input_bg"],
+        input_wrap = tk.Frame(input_frame, bg=t["bg"])
+        input_wrap.pack(fill="x", pady=(SP["xs"], 0))
+        input_box = tk.Text(input_wrap, height=2, font=FONTS["code_sm"], bg=t["input_bg"],
                             fg=t["text"], relief="solid", bd=1, wrap="word")
-        input_box.pack(fill="x", pady=(SP["xs"], 0))
+        input_y = tk.Scrollbar(input_wrap, orient="vertical", command=input_box.yview)
+        input_box.configure(yscrollcommand=input_y.set)
+        input_y.pack(side="right", fill="y")
+        input_box.pack(side="left", fill="both", expand=True)
         # preload saved inputs
         try:
             input_box.insert("1.0", p.get("sandbox_inputs", "") or "")
@@ -12890,9 +12937,14 @@ class SandboxPage(tk.Frame):
         # ---------- Output (right, bottom) ----------
         tk.Label(bottom, text="Output", bg=t["bg"], fg=t["muted"],
                  font=FONTS["caption_bold"], anchor="w").pack(anchor="w", padx=SP["lg"], pady=SP["sm"])
-        output_box = tk.Text(bottom, height=6, font=FONTS["code"], bg=t["code_bg"],
+        output_frame = tk.Frame(bottom, bg=t["bg"])
+        output_frame.pack(fill="both", expand=True, padx=SP["lg"], pady=(0, SP["sm"]))
+        output_box = tk.Text(output_frame, height=6, font=FONTS["code"], bg=t["code_bg"],
                              fg=t["text"], relief="solid", bd=1, wrap="word")
-        output_box.pack(fill="both", expand=True, padx=SP["lg"], pady=(0, SP["sm"]))
+        out_y = tk.Scrollbar(output_frame, orient="vertical", command=output_box.yview)
+        output_box.configure(yscrollcommand=out_y.set)
+        out_y.pack(side="right", fill="y")
+        output_box.pack(side="left", fill="both", expand=True)
         output_box.configure(state="disabled")
 
         def run_code():
