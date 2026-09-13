@@ -10947,7 +10947,7 @@ class LanguageSelectionPage(tk.Frame):
             ("\U0001F3AF Daily Challenge", DailyChallengePage),
             ("\U0001F4DA Review Queue", ReviewQueuePage),
             ("\U0001F3C6 Badges", "BADGES"),
-            ("\u2328 Playground", SandboxPage),
+            ("\u2328 Sandbox", SandboxPage),
             ("\U0001F5D3 Planning Guide", PlanningGuidePage),
         ]:
             if page == "BADGES":
@@ -12655,7 +12655,7 @@ class SandboxPage(tk.Frame):
         # Language-aware playground header
         lang = current_language(p)
         meta = LANGUAGE_META.get(lang, LANGUAGE_META["python"]) if lang in SUPPORTED_LANGUAGES else LANGUAGE_META["python"]
-        playground_title = f"\u2328  {meta['name']} Playground" if lang in SUPPORTED_LANGUAGES else "\u2328  Playground"
+        playground_title = f"\u2328  {meta['name']} Sandbox" if lang in SUPPORTED_LANGUAGES else "\u2328  Playground"
         playground_desc = f"A sandbox to experiment with {meta['name']} \u2014 nothing is graded. Pick a starter on the left or write your own, then run it." if lang in SUPPORTED_LANGUAGES else "A sandbox to experiment \u2014 nothing is graded. Pick a starter on the left or write your own, then run it."
         # Show JDK hint for Java if not available
         jdk_note = ""
@@ -12723,15 +12723,17 @@ class SandboxPage(tk.Frame):
 
         btn_row = tk.Frame(ideas, bg=t["card"])
         btn_row.pack(fill="x", padx=SP["md"], pady=(SP["sm"], SP["md"]))
+        btn_row.grid_columnconfigure(0, weight=1)
+        btn_row.grid_columnconfigure(1, weight=1)
         load_btn = tk.Button(btn_row, text="\u25B6 Load into Editor",
                              command=lambda: self._load_selected(),
                              font=FONTS["button_sm"], padx=SP["sm"], pady=SP["xs"])
-        load_btn.pack(side="left")
+        load_btn.grid(row=0, column=0, sticky="ew", padx=(0, SP["xs"]//2))
         style_button(load_btn, t, "accent", "accent_hover")
         surprise_btn = tk.Button(btn_row, text="\U0001F3B2 Surprise Me",
                                  command=lambda: self._surprise(None, t),
                                  font=FONTS["button_sm"], padx=SP["sm"], pady=SP["xs"])
-        surprise_btn.pack(side="left", padx=(SP["xs"], 0))
+        surprise_btn.grid(row=0, column=1, sticky="ew", padx=(SP["xs"]//2, 0))
         style_button(surprise_btn, t, "secondary_btn_bg", "secondary_btn_hover")
 
         self._populate_list()
@@ -14992,17 +14994,26 @@ class SettingsPage(tk.Frame):
 #==============================================================================
 
 class PlanningGuidePage(tk.Frame):
-    """Optional planning guide – not required, just there if you want a schedule."""
+    """Interactive planning roadmap — skill-tree-like, language-aware, with achievements."""
 
     def __init__(self, parent, controller):
         super().__init__(parent, bg=controller.theme["bg"])
         self.controller = controller
+        # persist pace choice
+        if "planning_pace" not in self.controller.progress:
+            self.controller.progress["planning_pace"] = "4-week"
+        self._pace_var = tk.StringVar(value=self.controller.progress.get("planning_pace", "4-week"))
 
     def refresh(self):
         for w in self.winfo_children():
             w.destroy()
         t = self.controller.theme
+        p = self.controller.progress
         self.configure(bg=t["bg"])
+        try:
+            p["planning_pace"] = self._pace_var.get()
+        except Exception:
+            pass
         # Scrollable
         canvas = tk.Canvas(self, bg=t["bg"], highlightthickness=0)
         vsb = tk.Scrollbar(self, orient="vertical", command=canvas.yview)
@@ -15014,70 +15025,175 @@ class PlanningGuidePage(tk.Frame):
         inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
         _enable_mousewheel(canvas, inner)
 
-        # Dynamic totals so guide never goes stale when lessons are added
+        # Dynamic totals — language-aware
         try:
-            _py_sets = get_lesson_sets_for_language("python")
-            _java_sets = get_lesson_sets_for_language("java")
-            _py_total = sum(len(v) for v in _py_sets.values())
-            _java_total = sum(len(v) for v in _java_sets.values())
-            _subtitle = f"Not required. Use it only if you want a loose schedule. All {_py_total} Python + {_java_total} Java lessons stay unlocked — go at your own pace."
+            cur_lang = current_language(p) or "python"
+            if cur_lang not in SUPPORTED_LANGUAGES:
+                cur_lang = "python"
+            lesson_sets = get_lesson_sets_for_language(cur_lang)
+            meta = LANGUAGE_META.get(cur_lang, LANGUAGE_META["python"])
+            total_all = sum(len(v) for v in lesson_sets.values())
+            total_done = sum(len(_get_completed_for_level(p, lv)) for lv in ["Beginner", "Intermediate", "Advanced"])
         except Exception:
-            _subtitle = "Not required. Use it only if you want a loose schedule. All lessons stay unlocked — go at your own pace."
+            cur_lang = "python"
+            lesson_sets = get_lesson_sets_for_language("python")
+            meta = LANGUAGE_META["python"]
+            total_done = 0
+            total_all = sum(len(v) for v in lesson_sets.values())
         hdr = tk.Frame(inner, bg=t["panel"], padx=SP["xl"], pady=SP["xl"])
         hdr.pack(fill="x", padx=SP["xl"], pady=(SP["xl"], SP["md"]))
-        tk.Label(hdr, text="🗓  Planning Guide — Optional", bg=t["panel"], fg=t["text"], font=FONTS["heading_lg"]).pack(anchor="w")
-        tk.Label(hdr, text=_subtitle,
+        tk.Label(hdr, text=f"{meta['icon']}  {meta['name']} Roadmap — Interactive", bg=t["panel"], fg=t["text"], font=FONTS["heading_lg"]).pack(anchor="w")
+        tk.Label(hdr, text=f"{total_done}/{total_all} lessons done in {meta['name']} — {cur_lang} track — click any lesson to jump. Achievements unlock per week and per level.",
                  bg=t["panel"], fg=t["text_secondary"], font=FONTS["body_sm"], wraplength=680, justify="left").pack(anchor="w", pady=(SP["xs"], 0))
-        tk.Label(hdr, text="Tip: Python Beginner → Java Beginner → back is fine, but finishing one Beginner track fully first is usually less confusing.",
-                 bg=t["panel"], fg=t["muted"], font=FONTS["caption"], wraplength=680, justify="left").pack(anchor="w", pady=(SP["xs"], 0))
-
-        # 3 plans
-        for title, pace, weeks in [
-            ("2-Week Crash", "9 lessons/week", [
-                "Week 1: Python Beginner 1-5 + Java Beginner 1-4 (core + for/if)",
-                "Week 2: Python Beginner 6-9 + Java Beginner 5-9 (while/booleans) + pick one Intermediate starter",
-            ]),
-            ("4-Week Steady (Recommended)", "4-5 lessons/week + 1 review/day", [
-                "Week 1: Python Beginner 1-4, Java Beginner 1-2",
-                "Week 2: Python Beginner 5-9, Java Beginner 3-5",
-                "Week 3: Python Intermediate 1-4, Java Intermediate 1-4",
-                "Week 4: Your choice: finish Intermediate or start Advanced 1-2 + 1 Sandbox project",
-            ]),
-            ("6-Week Deep", "3 lessons/week, lots of sandbox", [
-                "Weeks 1-2: Both Beginners fully – compare Python vs Java daily",
-                "Weeks 3-4: Both Intermediates – focus on HashMap/HashSet vs dict/set",
-                "Weeks 5-6: Pick one Advanced track (Streams/Generics or Decorators/Generators) + 2 Sandbox builds",
-            ]),
-        ]:
+        pct = (total_done / total_all) if total_all else 0
+        bar = tk.Frame(hdr, bg=t["progress_bg"], height=8)
+        bar.pack(fill="x", pady=(SP["sm"], 0))
+        bar.pack_propagate(False)
+        tk.Frame(bar, bg=t["progress_fill"]).place(relx=0, rely=0, relwidth=pct, relheight=1.0)
+        # Achievements row — per-level
+        ach_row = tk.Frame(inner, bg=t["bg"])
+        ach_row.pack(fill="x", padx=SP["xl"], pady=(0, SP["md"]))
+        achievements = []
+        for lvl in ["Beginner", "Intermediate", "Advanced"]:
+            n = len(lesson_sets.get(lvl, []))
+            done = len(_get_completed_for_level(p, lvl))
+            if n and done == n:
+                achievements.append((f"{lvl} Complete", "\U0001F3C6", t["success"]))
+            elif done > 0:
+                achievements.append((f"{lvl} {done}/{n}", "\u2B50", t["accent"]))
+        if not achievements:
+            achievements.append(("Start your first lesson", "\U0001F331", t["muted"]))
+        for title, icon, col in achievements:
+            f = tk.Frame(ach_row, bg=t["card"], bd=1, relief="solid", padx=SP["md"], pady=SP["sm"])
+            f.pack(side="left", padx=(0, SP["sm"]))
+            tk.Label(f, text=icon, bg=t["card"], font=("Segoe UI", 16)).pack(side="left")
+            tk.Label(f, text=title, bg=t["card"], fg=col, font=FONTS["caption_bold"]).pack(side="left", padx=(SP["xs"], 0))
+        # Language + Pace selectors
+        ctrl = tk.Frame(inner, bg=t["bg"])
+        ctrl.pack(fill="x", padx=SP["xl"], pady=(0, SP["md"]))
+        lang_row = tk.Frame(ctrl, bg=t["bg"])
+        lang_row.pack(fill="x", pady=(0, SP["sm"]))
+        tk.Label(lang_row, text="Track:", bg=t["bg"], fg=t["muted"], font=FONTS["caption_bold"]).pack(side="left")
+        tk.Label(lang_row, text=f"{meta['icon']} {meta['name']}", bg=t["panel"], fg=t["text"], font=FONTS["body_bold"], padx=SP["sm"], pady=2).pack(side="left", padx=(SP["xs"], 0))
+        tk.Label(lang_row, text="(change in Main Menu)", bg=t["bg"], fg=t["muted"], font=FONTS["caption"]).pack(side="left", padx=(SP["sm"], 0))
+        b_to_skill = tk.Button(lang_row, text="Open Skill Tree \u2192", command=lambda: self.controller.show_frame(SkillTreePage), font=FONTS["caption"], padx=SP["sm"])
+        b_to_skill.pack(side="right")
+        style_button(b_to_skill, t, "secondary_btn_bg", "secondary_btn_hover")
+        pace_row = tk.Frame(ctrl, bg=t["bg"])
+        pace_row.pack(fill="x")
+        tk.Label(pace_row, text="Pace:", bg=t["bg"], fg=t["muted"], font=FONTS["caption_bold"]).pack(side="left")
+        for pace_val, label in [("2-week", "2-Week Crash \u2014 9/wk"), ("4-week", "4-Week Steady \u2014 4-5/wk"), ("6-week", "6-Week Deep \u2014 3/wk")]:
+            sel = (self._pace_var.get() == pace_val)
+            bg = t["accent"] if sel else t["panel"]
+            fg = "white" if sel else t["text"]
+            b = tk.Button(pace_row, text=label, font=FONTS["caption_bold"] if sel else FONTS["caption"],
+                          bg=bg, fg=fg, activebackground=t["accent_hover"] if sel else t["border"],
+                          bd=0, padx=SP["sm"], pady=2,
+                          command=lambda v=pace_val: (self._pace_var.set(v), setattr(p, "planning_pace", v), save_progress(self.controller.progress_path, p), self.refresh()))
+            b.pack(side="left", padx=(SP["xs"], 0))
+        # Build weekly groups
+        pace = self._pace_var.get()
+        weeks = 2 if pace == "2-week" else 4 if pace == "4-week" else 6
+        flat = []
+        for lvl in ["Beginner", "Intermediate", "Advanced"]:
+            for idx, les in enumerate(lesson_sets.get(lvl, [])):
+                flat.append((lvl, idx, les.get("title", f"Lesson {idx+1}")))
+        total = len(flat)
+        per = (total + weeks - 1) // weeks if weeks else total
+        groups = []
+        for w in range(weeks):
+            s = w * per
+            e = min(s + per, total)
+            if s < total:
+                groups.append((w + 1, flat[s:e]))
+        def _is_done(lvl, idx):
+            try:
+                return idx in set(_get_completed_for_level(p, lvl))
+            except Exception:
+                return False
+        def _jump_to(lvl, idx):
+            cur = p.get("level", "")
+            if cur and cur != lvl:
+                cbl = p.setdefault("completed_by_level", {})
+                cbl[cur] = list(p.get("completed_lessons", []))
+            cbl = p.get("completed_by_level", {})
+            if lvl in cbl:
+                restored = list(cbl[lvl])
+            else:
+                restored = [] if cur != lvl else list(p.get("completed_lessons", []))
+            self.controller.update_progress(level=lvl, lesson_index=idx, step_index=0, completed_lessons=restored)
+            self.controller.show_frame(LearningPage)
+        for week_num, lessons_in_week in groups:
+            done_in_week = sum(1 for lvl, idx, _ in lessons_in_week if _is_done(lvl, idx))
+            total_in_week = len(lessons_in_week)
+            is_week_done = (done_in_week == total_in_week and total_in_week > 0)
             card = RoundedCard(inner, theme=t, page_bg=t["bg"], pad=SP["lg"])
             card.pack(fill="x", padx=SP["xl"], pady=(0, SP["md"]))
             card.content.configure(bg=t["panel"])
-            tk.Label(card.content, text=title, bg=t["panel"], fg=t["text"], font=FONTS["heading_sm"]).pack(anchor="w", padx=SP["lg"], pady=(SP["md"], 0))
-            tk.Label(card.content, text=pace, bg=t["panel"], fg=t["accent"], font=FONTS["caption_bold"]).pack(anchor="w", padx=SP["lg"])
-            for line in weeks:
-                tk.Label(card.content, text="• " + line, bg=t["panel"], fg=t["text_secondary"], font=FONTS["body_sm"], anchor="w", wraplength=640, justify="left").pack(fill="x", padx=SP["lg"], pady=2)
-            tk.Label(card.content, text="", bg=t["panel"]).pack()
-
-        # How to use without pressure
+            hdr2 = tk.Frame(card.content, bg=t["panel"])
+            hdr2.pack(fill="x", padx=SP["lg"], pady=(SP["md"], SP["xs"]))
+            tk.Label(hdr2, text=f"Week {week_num}", bg=t["panel"], fg=t["text"], font=FONTS["heading_sm"]).pack(side="left")
+            tk.Label(hdr2, text=f"{done_in_week}/{total_in_week} done", bg=t["panel"], fg=t["success"] if is_week_done else t["muted"], font=FONTS["caption_bold"]).pack(side="left", padx=(SP["sm"], 0))
+            if is_week_done:
+                tk.Label(hdr2, text="\U0001F3C6 Week Complete", bg=t["success_bg"], fg=t["success"], font=FONTS["caption_bold"], padx=SP["sm"], pady=2).pack(side="right")
+            else:
+                first_unfinished = next(((lvl, idx) for lvl, idx, _ in lessons_in_week if not _is_done(lvl, idx)), None)
+                if first_unfinished:
+                    lvl, idx = first_unfinished
+                    b = tk.Button(hdr2, text="Continue \u2192", font=FONTS["caption"], padx=SP["sm"], pady=1, command=lambda l=lvl, i=idx: _jump_to(l, i))
+                    b.pack(side="right")
+                    style_button(b, t, "accent", "accent_hover")
+            grid = tk.Frame(card.content, bg=t["panel"])
+            grid.pack(fill="x", padx=SP["lg"], pady=(0, SP["md"]))
+            for col in range(2):
+                grid.grid_columnconfigure(col, weight=1)
+            for i, (lvl, idx, title) in enumerate(lessons_in_week):
+                done = _is_done(lvl, idx)
+                is_current = (p.get("level") == lvl and p.get("lesson_index") == idx)
+                if done:
+                    bg = t["success"]
+                    fg = "white"
+                    icon = "\u2713"
+                elif is_current:
+                    bg = t["accent"]
+                    fg = "white"
+                    icon = "\u25CF"
+                else:
+                    bg = t["card"]
+                    fg = t["text"]
+                    icon = "\u25CB"
+                btn = tk.Button(grid, text=f"{icon}  {lvl[:3]} {idx+1}: {title}", anchor="w", justify="left", wraplength=300,
+                                font=FONTS["body_sm"] if is_current else FONTS["caption"],
+                                bg=bg, fg=fg, activebackground=t["accent_hover"] if not done else t["success"],
+                                bd=1, relief="solid", padx=SP["sm"], pady=4, command=lambda l=lvl, i=idx: _jump_to(l, i))
+                try:
+                    btn.configure(highlightbackground=t["border"], highlightcolor=t["border"])
+                except Exception:
+                    pass
+                r, c = divmod(i, 2)
+                btn.grid(row=r, column=c, sticky="ew", padx=(0 if c == 0 else SP["xs"], 0 if c == 1 else SP["xs"]), pady=2)
         tip = tk.Frame(inner, bg=t["tip_bg"], padx=SP["lg"], pady=SP["md"])
         tip.pack(fill="x", padx=SP["xl"], pady=(0, SP["xl"]))
-        tk.Label(tip, text="How to use without pressure", bg=t["tip_bg"], fg=t["tip_text"], font=FONTS["body_bold"]).pack(anchor="w")
+        tk.Label(tip, text="How to use — skill-tree style", bg=t["tip_bg"], fg=t["tip_text"], font=FONTS["body_bold"]).pack(anchor="w")
         for bullet in [
-            "No lock: you can ignore this and go lesson-by-lesson via Skill Tree.",
-            "Reset anytime: Settings → Reset Current Language or Reset Everything.",
-            "If you interleave, do a full Beginner track first, then mirror the other language's Beginner – less mixing of print vs System.out.println.",
-            "Daily: 1 lesson + 1 Review + optional Daily Challenge keeps streak alive.",
+            "Click any lesson chip to jump directly to that lesson in your current track (Python/Java).",
+            "Green \u2713 = done, blue \u25CF = current, \u25CB = up next. Week turns \U0001F3C6 when all its lessons are \u2713.",
+            "Switch track in Main Menu \u2192 progress, badges, and this roadmap all follow your language.",
+            "Need overview? Skill Tree shows the same lessons as a visual tree; this page groups them by weeks + achievements.",
         ]:
-            tk.Label(tip, text="• " + bullet, bg=t["tip_bg"], fg=t["tip_text"], font=FONTS["body_sm"], anchor="w", wraplength=640, justify="left").pack(fill="x", pady=2)
-
+            tk.Label(tip, text="\u2022 " + bullet, bg=t["tip_bg"], fg=t["tip_text"], font=FONTS["body_sm"], anchor="w", wraplength=640, justify="left").pack(fill="x", pady=2)
         btn_row = tk.Frame(inner, bg=t["bg"])
         btn_row.pack(fill="x", padx=SP["xl"], pady=(0, SP["xl"]))
-        b1 = tk.Button(btn_row, text="← Back to Progress", command=lambda: self.controller.show_frame(ProgressPage))
+        b1 = tk.Button(btn_row, text="\u2190 Back to Progress", command=lambda: self.controller.show_frame(ProgressPage))
         b1.pack(side="left", padx=(0, SP["sm"]))
         style_button(b1, t, "secondary_btn_bg", "secondary_btn_hover")
-        b2 = tk.Button(btn_row, text="Go to Learning →", command=lambda: self.controller.show_frame(LearningPage))
+        b2 = tk.Button(btn_row, text="Go to Learning \u2192", command=lambda: self.controller.show_frame(LearningPage))
         b2.pack(side="left")
         style_button(b2, t, "accent", "accent_hover")
+        try:
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        except Exception:
+            pass
 
 
 
