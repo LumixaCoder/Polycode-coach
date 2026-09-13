@@ -25,12 +25,24 @@ learning_progress.json
 learning_progress.json.bak
 *.bak
 
-# Generated view — source of truth is learn_python_gui.py (15k monolith) — DEV ONLY (kept locally, not on GitHub)
-# Regenerate: python _archive_modular_before_single_file/generate_modules.py
-app/
+# DEV ONLY — kept locally, not on GitHub (user repo is lumixa.py + languages/ + data/ only)
 learn_python_gui.py
-# keep the archived reference
-!_archive_modular_before_single_file/
+generate_guided_hq_gif.py
+build.py
+dev.py
+watch_build.py
+tests/
+_archive_modular_before_single_file/
+app/
+CODEMAP.md
+NOTES.md
+ARCHITECTURE_VISUAL.html
+run_dev.bat
+run_dev_windowed.bat
+run_forever.bat
+run_watch.bat
+.github/
+opencode.json
 
 # OS / IDE
 .DS_Store
