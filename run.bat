@@ -4,12 +4,12 @@ REM Uses pythonw (windowed) so the console closes immediately after launch.
 REM Prefers .venv\Scripts\pythonw.exe if present, else system pythonw, else python.
 
 if exist "%~dp0.venv\Scripts\pythonw.exe" (
-    start "" "%~dp0.venv\Scripts\pythonw.exe" "%~dp0lumixa.pyw"
+    start "" "%~dp0.venv\Scripts\pythonw.exe" "%~dp0lumixa.py"
     exit /b
 )
 where pythonw >nul 2>&1
 if %errorlevel%==0 (
-    start "" pythonw "%~dp0lumixa.pyw"
+    start "" pythonw "%~dp0lumixa.py"
 ) else (
     start "" python "%~dp0lumixa.py"
 )

@@ -84,7 +84,7 @@ def _export_progress(self):
 ## Where to edit
 
 - **Lessons (Python):** `languages/python/lessons.py:1` `build_lesson_sets()` — **canonical** (37 lessons: 9/9/19). `lesson_data.py:1` is shim that re-exports it. `SECTION 00b:91` embedded copy is fallback only (auto-synced).
-- **Lessons (Java):** `languages/java/lessons.py:1` `build_lesson_sets()` — 36 Java lessons (9/9/18) — keep in sync with Python track where possible (Python has +1 Advanced lesson: e.g. tkinter/GUI track not yet ported)
+- **Lessons (Java):** `languages/java/lessons.py:1` `build_lesson_sets()` — 36 Java lessons (9/9/18) — keep in sync with Python track where possible. Python has 37 (9/9/19) with +1 Advanced GUI track (`GUIs with tkinter`/`Buttons and events`/`Entry widgets` at `learn_python_gui.py:9380`) which is **Python-only by design** (tkinter has no Java equivalent; Java track uses `import java.util.*`/`Scanner` instead). Not a gap to port — documented difference.
 - **New theme:** `SECTION 02:3873` add to `THEMES` + `FONTS`
 - **New badge:** `SECTION 04:4684` `BADGES` list (23 today)
 - **New setting toggle:** `SECTION 29:13165` `SettingsPage` — copy `_sound_card`/`_backup_card` pattern

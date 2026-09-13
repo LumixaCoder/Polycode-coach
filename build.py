@@ -114,21 +114,6 @@ def discover_languages():
             langs.append(child.name)
     return sorted(langs)
 
-def discover_app_modules():
-    """Find every app/**/*.py as a dotted import for PyInstaller hidden-imports."""
-    mods = []
-    app_root = ROOT / "app"
-    if not app_root.is_dir():
-        return mods
-    for py in app_root.rglob("*.py"):
-        # skip __pycache__
-        if "__pycache__" in py.parts:
-            continue
-        rel = py.relative_to(ROOT).with_suffix("")
-        dotted = ".".join(rel.parts)
-        mods.append(dotted)
-    return sorted(mods)
-
 def copy_tree_with_retry(src: pathlib.Path, dst: pathlib.Path, retries=3):
     """Copy tree, retrying on lock. Ensures dst exists."""
     for attempt in range(retries):
@@ -226,9 +211,7 @@ def build_once():
             ])
         # Always include core fallback
         hidden_imports.extend(["lesson_data", "languages.python.lessons"])
-        # New modular app package - every app/**/*.py must be listed so the
-        # shim's dynamic __getattr__ imports are not tree-shaken away.
-        hidden_imports.extend(discover_app_modules())
+        # Note: app/ modular tree only exists in _archive_modular_before_single_file/ (not bundled)
 
         # Data files to bundle via PyInstaller datas
         # On Windows separator is ';', on POSIX ':'

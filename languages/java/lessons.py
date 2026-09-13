@@ -4,6 +4,11 @@ Mirrors the Python curriculum structure so the UI (levels, steps,
 final_projects, check lambdas) works unchanged. Checks are string-based
 like the Python track - they look for Java keywords the learner should use.
 
+Note: Python has 37 lessons (9/9/19) vs Java 36 (9/9/18). The +1 is the
+Advanced GUI track (tkinter: GUIs with tkinter / Buttons and events / Entry
+widgets) which is Python-only by design — Java uses Scanner / console I/O
+instead. See CODEMAP.md Where to edit. This is intentional, not a missing port.
+
 TEACHING STYLE: Every lesson assumes zero prior Java knowledge. Concept
 steps tell you *what* the piece is, *why* it exists, and *exactly where*
 to type it. Practice steps give you starter code with a marked gap and

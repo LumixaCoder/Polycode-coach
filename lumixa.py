@@ -8615,7 +8615,12 @@ def record_daily_solve(progress, today=None):
     daily["solved_dates"] = sorted(set(solved))
     daily["last_solved"] = day
     daily["streak"] = daily_challenge_streak(progress)
+    # Streak bonus: +2 XP if daily streak >=5 (opt-in bigger bonus from NOTES.md)
+    streak = daily.get("streak", 0)
+    bonus = 2 if streak >= 5 else 0
     award_xp(progress, DAILY_CHALLENGE_XP, "daily challenge")
+    if bonus:
+        award_xp(progress, bonus, "daily streak bonus")
     update_streak(progress)
     return True
 
@@ -14421,15 +14426,18 @@ class DailyChallengePage(tk.Frame):
                     pass
                 self.controller.check_badges()
                 streak_now = daily_challenge_streak(p)
-                msg = (f"\u2713 Solved! +{DAILY_CHALLENGE_XP} XP \u00b7 "
+                bonus = 2 if streak_now >= 5 else 0
+                total = DAILY_CHALLENGE_XP + (bonus if newly_solved else 0)
+                base_msg = f"+{DAILY_CHALLENGE_XP} XP" + (f" +{bonus} streak bonus" if bonus and newly_solved else "")
+                msg = (f"\u2713 Solved! {base_msg} \u00b7 "
                        f"{streak_now}-day challenge streak" if streak_now > 1
-                       else f"\u2713 Solved! +{DAILY_CHALLENGE_XP} XP \u2014 streak started.")
+                       else f"\u2713 Solved! {base_msg} \u2014 streak started.")
                 if not newly_solved:
                     msg = "\u2713 Correct again! (today's XP already banked.)"
                 feedback_var.set(msg)
                 feedback_lbl.configure(fg=t["success"])
                 code_entry.configure(highlightbackground=t["success"], highlightthickness=2)
-                show_toast(self.winfo_toplevel(), f"\U0001F3AF Challenge solved! +{DAILY_CHALLENGE_XP} XP", t)
+                show_toast(self.winfo_toplevel(), f"\U0001F3AF Challenge solved! {base_msg if newly_solved else f'+{DAILY_CHALLENGE_XP} XP'}", t)
                 self.after(1600, self.refresh)
                 return
 
