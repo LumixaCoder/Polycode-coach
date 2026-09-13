@@ -5,23 +5,24 @@
 
 A Tkinter app that assesses your level in Python & Java, then walks you through
 interactive lessons with hands-on code practice, quizzes, final projects,
-spaced review, and progress/XP tracking. Add more languages via `languages/<id>/lessons.py`.
+spaced review, and progress/XP tracking.
 
-> **New here?** Download → `python learn_python_gui.py` → pick language → quiz → start coding. No `pip install` needed (stdlib only, `watchdog` optional). See `CODEMAP.md` for where code lives.
+> **New here?** Download → run `lumixa.py` → pick language → quiz → start coding. No `pip install` needed (stdlib only).
 
 ## Run the GUI
 
-1. Open PowerShell in the project folder.
-2. Run:
+If you have the built app, double-click `dist/PolycodeCoach/PolycodeCoach.exe` (or `run.bat`).
+
+From source, open PowerShell in the project folder and run:
 
 ```powershell
-python learn_python_gui.py
+python lumixa.py
 ```
 
 If `python` is not available, try:
 
 ```powershell
-py learn_python_gui.py
+py lumixa.py
 ```
 
 ## What it does
@@ -166,79 +167,15 @@ Tough ones to plan around:
   earn a new badge, the app celebrates with a confetti burst so you know you
   nailed it.
 
-## Project structure
+## Where is my progress saved?
 
-- `lumixa.py`  — Polycode Coach** (clean, for users) — Tkinter app without hot-reload/watcher. This is what `build.py` freezes to `dist/PolycodeCoach/PolycodeCoach.exe`.
-- `lesson_data.py` — backward-compat shim re-exporting `languages/python/lessons.py` (`from languages.python.lessons import build_lesson_sets`); edit Python lessons in `languages/python/lessons.py:1`, not here.
-- `languages/` — per-language lesson modules (`python/lessons.py` 37 lessons, `java/lessons.py` 36 lessons,
-  add more by creating `languages/<new>/lessons.py` + entry in `SUPPORTED_LANGUAGES:3802`).
-- `data/` — bundled datasets (6 JSONs: `us_states.json` 50, `elements.json` 20, `planets.json` 8, `movies.json` 10, `weather.json` 10, `books.json` 10).
-- `tests/test_learning_progress.py` — 153 unit tests for evaluation, progress, streak/heatmap, sandbox, review scheduling, daily challenges, and lesson data.
-- `build.py:1` — builds `dist/PolycodeCoach/PolycodeCoach.exe` (PyInstaller `--onedir` `--add-data data;languages` + `runtime/` embed `3.13.14`), writes `build_info.json`, logs to `builds.log`. Supports `python build.py --watch`.
-- `watch_build.py:1` — **auto-update watcher** (recursive, debounced 2.0s, watchdog-aware, polls `*.py` + `data/*.json` + `languages/**/*.py`, ignores `.venv/build/dist/__pycache__`). Uses `watchdog` if installed, else polling. `python watch_build.py --help` for options.
-- `dev.py:1` + `run_dev.bat` — **one-click dev launcher**: starts `learn_python_gui.py` (hot-reload ~1.5s) *and* background `watch_build.py` together. Recommended: `python dev.py` or double-click `run_dev.bat`.
-- `PolycodeCoach.spec` + `Lumixa.spec` — PyInstaller specs (generated on `build.py` run, `*.spec` is gitignored): user `lumixa.py` → `PolycodeCoach`, dev `learn_python_gui.py` → `Lumixa`, both bundle `data/` + `languages/` + hiddenimports.
-- `builds.log` — readable history of every build (when, duration, trigger, OK/FAILED).
+Progress saves automatically after every step, lesson, and review — and again when you close the app. No manual saving needed.
 
-## Run the tests
+- File location: `%APPDATA%\PolycodeCoach\learning_progress.json`
+- Backup & Restore: open **Settings → Backup & Restore** to export a copy or import one on a new PC. Your streak, XP, badges, and per-language lesson progress carry over.
 
-```powershell
-python -m pytest tests -q
-```
+## Tips
 
-## Build a distributable app
-
-```powershell
-python build.py
-```
-
-This produces `dist/PolycodeCoach/` containing `PolycodeCoach.exe`, a
-`runtime/` Python interpreter (used by the sandbox), and a `run.bat` launcher.
-Progress is saved to `%APPDATA%\PolycodeCoach\learning_progress.json` (user edition `lumixa.py` / `PolycodeCoach.exe`; dev edition `learn_python_gui.py` uses `%APPDATA%\Lumixa\learning_progress.json`).
-
-## Auto-update while you code (no commands needed)
-
-The app now **auto-updates every time you save a change** — two layers:
-
-### 1) Live hot-reload (instant, no restart)
-
-When you run from source (`python learn_python_gui.py`), the GUI polls
-`lesson_data.py` + `languages/*/lessons.py` + `data/*.json` every ~1.5s.
-Save a lesson file and within ~2s you get a `🔄 Auto-updated: ... reloaded`
-toast and the new content appears — no restart, no rebuild.
-
-- Works automatically, no flags needed
-- Disable with `python learn_python_gui.py --no-hot-reload`
-
-### 2) Auto-rebuild the frozen exe (dist/PolycodeCoach)
-
-For the distributable exe, use one of:
-
-```powershell
-# Recommended: one command starts GUI + watcher together
-python dev.py
-# or double-click run_dev.bat
-
-# Or separately:
-python watch_build.py              # watch & rebuild on every save
-python learn_python_gui.py --watch # GUI spawns watcher in background
-python build.py --watch            # build once then watch
-```
-
-Details:
-
-- **What it watches (recursive):** all `.py` (including `languages/**/*.py`),
-  `data/*.json`, `*.spec` — ignores `.venv`, `build`, `dist`, `__pycache__`,
-  `.git`, `*.pyc`, `builds.log`, etc.
-- **Debounce:** waits ~2.0s after your last save to settle, then builds
-  (tune with `watch_build.py --debounce 1.0 --poll-interval 0.5`)
-- **Backends:** uses `watchdog` (native OS events) if installed
-  (`pip install watchdog` for instant, low-CPU), otherwise efficient polling
-- **Output:** `dist/PolycodeCoach/` (exe + runtime + data + languages)
-  plus `build_info.json` with timestamp/trigger; `builds.log` history
-- **If rebuild fails** (exe still running → Windows lock): close the app and
-  save any file again to retry; watcher retries automatically
-- **Stop:** `Ctrl+C` in watcher terminal, or close the GUI (dev.py stops both)
-
-To review your build history, open `builds.log` in the project folder.
-Verbose watcher: `python watch_build.py --verbose` (or `--poll` to force polling).
+- Switch languages anytime via **Main Menu** — XP, streak, and badges are shared; lesson progress is per-language.
+- Use **Playground** to experiment freely — nothing there is graded.
+- Keep your streak alive with a quick **Review** or **Daily Challenge** if you are short on time.
