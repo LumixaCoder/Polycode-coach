@@ -26,9 +26,9 @@ py learn_python_gui.py
 
 ## What it does
 
-- Welcome screen with stats and roadmap
-- A 5-question level quiz (Beginner / Intermediate / Advanced)
-- Step-by-step lessons: concepts, guided practice, and quick checks
+- Welcome screen with stats and roadmap (streak nudge + quick actions)
+- A 6-question tiered placement quiz (2 easy / 2 medium / 2 hard → Beginner / Intermediate / Advanced)
+- Step-by-step lessons: 37 Python (9/9/19) + 36 Java (9/9/18) — concepts, guided practice, and quick checks
 - **Three kinds of hands-on practice** — write code from scratch, **debug broken code** that's handed to you, and **fill in the blanks** of a real template (you complete the missing pieces)
 - A sandboxed code playground (student code runs in a restricted subprocess)
 - A "Coach" panel: hints, error diagnosing, prediction quizzes, guided help
@@ -53,13 +53,13 @@ py learn_python_gui.py
 
 ## The Goal of the App
 
-The goal is simple: go from a complete beginner to a confident Python programmer
+The goal is simple: go from a complete beginner to a confident Python *and* Java programmer
 by actually writing code, not just reading about it.
 
 Here is the journey:
 
-1. **Take the placement quiz** — 5 quick questions that figure out where you
-   should start (Beginner, Intermediate, or Advanced). Don't worry about
+1. **Take the placement quiz** — 6 tiered questions (2 easy / 2 medium / 2 hard) that figure out where you
+   should start (Beginner / Intermediate / Advanced). Don't worry about
    "failing" — it just places you at the level that's right for you.
 2. **Work through the lessons** — each lesson is a series of steps (concepts,
    guided examples, quizzes, and hands-on practice). You type real code and run
@@ -99,14 +99,14 @@ units you found hardest.
 
 As your XP and completed lessons grow, you unlock new levels:
 
-- **Beginner** — variables, numbers, strings, conditions, lists, loops,
+- **Beginner (9 lessons)** — variables, numbers, strings, conditions, lists, loops,
   functions, and reading/fixing broken code. The foundation of everything.
-- **Intermediate** — dictionaries, sets, list comprehensions, file I/O,
+- **Intermediate (9 lessons)** — dictionaries, sets, list comprehensions, file I/O,
   error handling, f-strings for real formatting, and more advanced patterns.
-- **Advanced** — decorators, generators, regular expressions, testing with
+- **Advanced (19 Python / 18 Java)** — decorators, generators, regular expressions, testing with
   `assert`, recursion and algorithm thinking, and real-world project design.
 
-Once you finish **every** lesson in a level, it's time to tackle the next one.
+Python has 37 total lessons, Java 36 (GUI/tkinter track is Python-only). Once you finish **every** lesson in a level, it's time to tackle the next one. Switch languages anytime via Main Menu — progress, XP, streak and badges are shared globally, lesson progress is per-language (`language_states`).
 
 ## The 23 Achievements (and How to Get Each)
 
@@ -170,24 +170,16 @@ Tough ones to plan around:
 
 - `lumixa.py` — **USER EDITION — Polycode Coach** (clean, for users) — Tkinter app without hot-reload/watcher. This is what `build.py` freezes to `dist/PolycodeCoach/PolycodeCoach.exe`.
 - `learn_python_gui.py` — **DEV EDITION — Lumixa** (for you) — same app + **live hot-reload** (polls lesson_data + languages/*/lessons.py every ~1.5s) and `--watch` auto-watcher. Keep editing here; `lumixa.py` is generated from it.
-- `lesson_data.py` — the lesson, step, and final-project content (legacy fallback;
-  per-language `languages/<id>/lessons.py` is preferred).
-- `languages/` — per-language lesson modules (`python/lessons.py`, `java/lessons.py`,
-  add more by creating `languages/<new>/lessons.py` + entry in `SUPPORTED_LANGUAGES`).
-- `data/` — bundled datasets (`us_states.json`, `elements.json`, `planets.json`).
-- `tests/test_learning_progress.py` — unit tests for evaluation, progress,
-  sandbox, review scheduling, and lesson data.
-- `build.py` — builds a distributable folder app with PyInstaller, bundles
-  `data/` + `languages/` + embeddable Python runtime, writes `build_info.json`,
-  and logs every build to `builds.log`. Supports `python build.py --watch`.
-- `watch_build.py` — **auto-update watcher** (recursive, debounced, watchdog-aware).
-  Watches all `.py` + `data/*.json` + `languages/**/*.py` and rebuilds on save.
-  Uses `watchdog` if installed, otherwise polling. `python watch_build.py --help` for options.
-- `dev.py` + `run_dev.bat` — **one-click dev launcher**: starts GUI with hot-reload
-  *and* background exe watcher together. Recommended: `python dev.py` or double-click `run_dev.bat`.
-- `PolycodeCoach.spec` — user build (Polycode Coach, from `lumixa.py`) + `Lumixa.spec` — dev build (Lumixa, from `learn_python_gui.py`) — both include `data` + `languages` + hiddenimports.
-- `builds.log` — a readable history of every build: when it ran, how long it
-  took, what changed, and whether it succeeded.
+- `lesson_data.py` — backward-compat shim re-exporting `languages/python/lessons.py` (`from languages.python.lessons import build_lesson_sets`); edit Python lessons in `languages/python/lessons.py:1`, not here.
+- `languages/` — per-language lesson modules (`python/lessons.py` 37 lessons, `java/lessons.py` 36 lessons,
+  add more by creating `languages/<new>/lessons.py` + entry in `SUPPORTED_LANGUAGES:3802`).
+- `data/` — bundled datasets (6 JSONs: `us_states.json` 50, `elements.json` 20, `planets.json` 8, `movies.json` 10, `weather.json` 10, `books.json` 10).
+- `tests/test_learning_progress.py` — 153 unit tests for evaluation, progress, streak/heatmap, sandbox, review scheduling, daily challenges, and lesson data.
+- `build.py:1` — builds `dist/PolycodeCoach/PolycodeCoach.exe` (PyInstaller `--onedir` `--add-data data;languages` + `runtime/` embed `3.13.14`), writes `build_info.json`, logs to `builds.log`. Supports `python build.py --watch`.
+- `watch_build.py:1` — **auto-update watcher** (recursive, debounced 2.0s, watchdog-aware, polls `*.py` + `data/*.json` + `languages/**/*.py`, ignores `.venv/build/dist/__pycache__`). Uses `watchdog` if installed, else polling. `python watch_build.py --help` for options.
+- `dev.py:1` + `run_dev.bat` — **one-click dev launcher**: starts `learn_python_gui.py` (hot-reload ~1.5s) *and* background `watch_build.py` together. Recommended: `python dev.py` or double-click `run_dev.bat`.
+- `PolycodeCoach.spec` + `Lumixa.spec` — PyInstaller specs (generated on `build.py` run, `*.spec` is gitignored): user `lumixa.py` → `PolycodeCoach`, dev `learn_python_gui.py` → `Lumixa`, both bundle `data/` + `languages/` + hiddenimports.
+- `builds.log` — readable history of every build (when, duration, trigger, OK/FAILED).
 
 ## Run the tests
 
