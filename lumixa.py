@@ -3895,16 +3895,16 @@ build_lesson_sets = _legacy_build_lesson_sets
 
 THEMES = {
     "light": {
-        "bg": "#f8f9fb",
+        "bg": "#f9fafb",
         "panel": "#ffffff",
         "text": "#1a1a2e",
         "text_secondary": "#4a5568",
         "muted": "#718096",
-        "accent": "#4f46e5",
-        "accent_hover": "#6366f1",
+        "accent": "#6366f1",
+        "accent_hover": "#818cf8",
         "accent_2": "#818cf8",
-        "card": "#f1f5f9",
-        "card_hover": "#e2e8f0",
+        "card": "#f3f6fa",
+        "card_hover": "#e8eef7",
         "code_bg": "#f8fafc",
         "code_border": "#e2e8f0",
         "tip_bg": "#eff6ff",
@@ -3915,8 +3915,8 @@ THEMES = {
         "error_bg": "#fef2f2",
         "warning": "#d97706",
         "warning_bg": "#fffbeb",
-        "border": "#e2e8f0",
-        "divider": "#e2e8f0",
+        "border": "#e6edf5",
+        "divider": "#e6edf5",
         "input_bg": "#ffffff",
         "input_border": "#cbd5e1",
         "radio_select": "#e0e7ff",
@@ -3925,9 +3925,9 @@ THEMES = {
         "sidebar_active": "#4f46e5",
         "sidebar_hover": "#e0e7ff",
         "sidebar_done": "#059669",
-        "navbar_bg": "#1e1b4b",
-        "navbar_text": "#ffffff",
-        "navbar_hover": "#312e81",
+        "navbar_bg": "#ffffff",
+        "navbar_text": "#334155",
+        "navbar_hover": "#eef2ff",
         "progress_bg": "#e2e8f0",
         "progress_fill": "#4f46e5",
         "secondary_btn_bg": "#64748b",
@@ -3943,22 +3943,22 @@ THEMES = {
         "badge_advanced": "#dc2626",
         "toast_bg": "#065f46",
         "toast_text": "#ecfdf5",
-        "accent_border": "#4f46e5",
+        "accent_border": "#6366f1",
         "roadmap_line": "#e2e8f0",
         "card_shadow": "#dfe4ee",
         "card_shadow2": "#ebeff6",
     },
     "dark": {
-        "bg": "#0f172a",
-        "panel": "#1e293b",
+        "bg": "#141e33",
+        "panel": "#233045",
         "text": "#f1f5f9",
         "text_secondary": "#94a3b8",
         "muted": "#64748b",
-        "accent": "#818cf8",
-        "accent_hover": "#a5b4fc",
+        "accent": "#8ea0f2",
+        "accent_hover": "#a8b8ff",
         "accent_2": "#6366f1",
-        "card": "#1e293b",
-        "card_hover": "#334155",
+        "card": "#233045",
+        "card_hover": "#2e3e5a",
         "code_bg": "#1a2332",
         "code_border": "#334155",
         "tip_bg": "#1e293b",
@@ -3974,15 +3974,15 @@ THEMES = {
         "input_bg": "#0f172a",
         "input_border": "#475569",
         "radio_select": "#312e81",
-        "sidebar_bg": "#111827",
+        "sidebar_bg": "#1a253a",
         "sidebar_text": "#cbd5e1",
         "sidebar_active": "#a5b4fc",
         "sidebar_hover": "#1f2937",
         "sidebar_done": "#34d399",
-        "navbar_bg": "#0c0a1d",
-        "navbar_text": "#f1f5f9",
-        "navbar_hover": "#1e1b4b",
-        "progress_bg": "#334155",
+        "navbar_bg": "#1a253a",
+        "navbar_text": "#e2e8f0",
+        "navbar_hover": "#233045",
+        "progress_bg": "#2e3e5a",
         "progress_fill": "#818cf8",
         "secondary_btn_bg": "#475569",
         "secondary_btn_hover": "#64748b",
@@ -4003,8 +4003,8 @@ THEMES = {
         "card_shadow2": "#152033",
     },
     "ocean": {
-        "bg": "#0a1a2f",
-        "panel": "#122a4a",
+        "bg": "#0e1e36",
+        "panel": "#173052",
         "text": "#e0f0ff",
         "text_secondary": "#8fb8e0",
         "muted": "#5a8ab0",
@@ -4057,8 +4057,8 @@ THEMES = {
         "card_shadow2": "#0a1a2f",
     },
     "forest": {
-        "bg": "#0f1f0f",
-        "panel": "#1a3220",
+        "bg": "#142414",
+        "panel": "#1e3826",
         "text": "#e6f5e6",
         "text_secondary": "#8fbc8f",
         "muted": "#5a8a5a",
@@ -4223,10 +4223,10 @@ def switch_language(progress, new_lang):
     return True
 
 _BASE_FONTS = {
-    "heading_xl": ("Segoe UI", 28, "bold"),
-    "heading_lg": ("Segoe UI", 22, "bold"),
-    "heading_md": ("Segoe UI", 16, "bold"),
-    "heading_sm": ("Segoe UI", 12, "bold"),
+    "heading_xl": ("Segoe UI", 26, "bold"),
+    "heading_lg": ("Segoe UI", 20, "bold"),
+    "heading_md": ("Segoe UI", 15, "bold"),
+    "heading_sm": ("Segoe UI", 11, "bold"),
     "body": ("Segoe UI", 11),
     "body_bold": ("Segoe UI", 11, "bold"),
     "body_sm": ("Segoe UI", 10),
@@ -4268,7 +4268,7 @@ def rebuild_fonts(scale):
         FONTS[key] = (family, new_size, *style) if style else (family, new_size)
 
 SP = {
-    "xs": 4, "sm": 8, "md": 12, "lg": 16, "xl": 24, "xxl": 36,
+    "xs": 6, "sm": 10, "md": 14, "lg": 18, "xl": 28, "xxl": 40,
 }
 
 
@@ -10069,7 +10069,7 @@ class PythonLearnerApp(tk.Tk):
     def _build_ui(self):
         self.configure(bg=self.theme["navbar_bg"])
 
-        nav = tk.Frame(self, bg=self.theme["navbar_bg"], height=52)
+        nav = tk.Frame(self, bg=self.theme["navbar_bg"], height=46)
         nav.pack(fill="x", side="top")
         nav.pack_propagate(False)
 
