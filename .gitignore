@@ -17,6 +17,8 @@ htmlcov/
 build/
 dist/
 *.spec
+*.zip
+*.tar.gz
 builds.log
 build_info.json
 
