@@ -81,7 +81,6 @@ its SECTION's sub-banner so the next reader finds it in scan order.
 #==============================================================================
 
 import ast
-import argparse
 import base64
 import importlib
 import json
@@ -16291,7 +16290,7 @@ class LearningPage(tk.Frame):
                 diff_box.delete("1.0", tk.END)
                 for r in result:
                     mark = "✓" if r["ok"] else "✗"
-                    color_tag = "ok" if r["ok"] else "bad"
+                    _color_tag = "ok" if r["ok"] else "bad"  # noqa: F841
                     line_txt = f"{mark} line {r['line']}: expected |{r['expected']}|  got |{r['got']}|  {'OK' if r['ok'] else '— fix this line'}"
                     diff_box.insert(tk.END, line_txt + "\n")
                 diff_box.configure(state="disabled")
@@ -16565,10 +16564,10 @@ class LearningPage(tk.Frame):
                 scen_inner, text=proj["scenario"], bg=t["tip_bg"], fg=t["tip_text"],
                 font=FONTS["body"], anchor="w", wraplength=320, justify="left",
             ).pack(fill="x", padx=SP["lg"], pady=(0, SP["md"]))
-            # Level 3 callout
+            # Level 3 callout (packed below, visibility toggled in render_guidance)
             lvl_tip = tk.Label(scen_inner, text="Level 3: This scenario IS your brief — no extra steps given.", bg=t["tip_bg"], fg=t["muted"],
                                font=FONTS["caption"], anchor="w", wraplength=320, justify="left")
-            # Will show/hide via render_guidance
+            lvl_tip.pack(fill="x", padx=SP["lg"], pady=(0, SP["sm"]))
 
         # ── Guidance-dependent container (Requirements / Concepts / Milestones) ──
         guidance_box = tk.Frame(inner, bg=t["panel"])
@@ -16578,12 +16577,16 @@ class LearningPage(tk.Frame):
             for w in guidance_box.winfo_children():
                 w.destroy()
             cur = get_project_guidance_level(self.controller.progress, level, lesson_idx)
-            # Keep description of level in sync
+            # Keep description of level + lvl_tip visibility in sync
             try:
                 lvl_desc_var.set(GUIDANCE_LEVEL_META[cur]["label"] + " — " + GUIDANCE_LEVEL_META[cur]["desc"])
+                if lvl_tip.winfo_exists():
+                    if cur == "3":
+                        lvl_tip.pack(fill="x", padx=SP["lg"], pady=(0, SP["sm"]))
+                    else:
+                        lvl_tip.pack_forget()
             except Exception:
                 pass
-            hint_levels = proj.get("hint_levels") or _derive_hint_levels(proj)
             requirements = proj.get("requirements") or _derive_requirements(proj)
             concepts = proj.get("required_concepts") or _derive_required_concepts(lesson)
             detailed = proj.get("steps", [])
