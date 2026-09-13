@@ -9,6 +9,15 @@ spaced review, and progress/XP tracking.
 
 > **New here?** Download → run `lumixa.py` → pick language → quiz → start coding. No `pip install` needed (stdlib only).
 
+## Download (Windows, no install)
+
+**Latest release:** [PolycodeCoach-v1.0.0.zip](https://github.com/LumixaCoder/Polycode-coach/releases/latest/download/PolycodeCoach-v1.0.0.zip) (22 MB) — unzip and double-click `PolycodeCoach/PolycodeCoach.exe` or `run.bat`. No Python needed.
+
+- See [all releases](../../releases) · [v1.0.0 notes](../../releases/tag/v1.0.0) · [SHA256](../../releases/download/v1.0.0/PolycodeCoach-v1.0.0.zip.sha256)
+- Your progress saves to `%APPDATA%\PolycodeCoach\learning_progress.json` (move it via `Settings → File location`).
+
+> **For devs:** pushing a tag `v*` (e.g., `git tag v1.0.1; git push origin v1.0.1`) auto-builds the zip on GitHub Actions (`.github/workflows/release.yml`) and attaches it to the Release — no manual upload needed. See `RELEASE_NOTES_v1.0.0.md` for what's in v1.0.0.
+
 ## Run the GUI
 
 If you have the built app, double-click `dist/PolycodeCoach/PolycodeCoach.exe` (or `run.bat`).
