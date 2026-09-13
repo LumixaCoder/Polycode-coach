@@ -15182,9 +15182,18 @@ class PlanningGuidePage(tk.Frame):
         lang_row = tk.Frame(ctrl, bg=t["bg"])
         lang_row.pack(fill="x", pady=(0, SP["sm"]))
         tk.Label(lang_row, text="Track:", bg=t["bg"], fg=t["muted"], font=FONTS["caption_bold"]).pack(side="left")
-        tk.Label(lang_row, text=f"{meta['icon']} {meta['name']}", bg=t["panel"], fg=t["text"], font=FONTS["body_bold"], padx=SP["sm"], pady=2).pack(side="left", padx=(SP["xs"], 0))
-        tk.Label(lang_row, text="(change in Main Menu)", bg=t["bg"], fg=t["muted"], font=FONTS["caption"]).pack(side="left", padx=(SP["sm"], 0))
-        b_to_skill = tk.Button(lang_row, text="Open Skill Tree \u2192", command=lambda: self.controller.show_frame(SkillTreePage), font=FONTS["caption"], padx=SP["sm"])
+        for lang_opt in SUPPORTED_LANGUAGES:
+            m2 = LANGUAGE_META.get(lang_opt, {"name": lang_opt.title(), "icon": "📄"})
+            sel2 = (cur_lang == lang_opt)
+            b_lang = tk.Button(lang_row, text=f"{m2['icon']} {m2['name']}", font=FONTS["caption_bold"] if sel2 else FONTS["caption"],
+                               bg=t["accent"] if sel2 else t["panel"], fg="white" if sel2 else t["text"],
+                               bd=1 if sel2 else 1, relief="solid", padx=SP["sm"], pady=1,
+                               command=lambda l=lang_opt: (self.controller.set_language(l), save_progress(self.controller.progress_path, self.controller.progress), self.refresh()))
+            b_lang.pack(side="left", padx=(SP["xs"]//2, 0))
+            if sel2:
+                try: b_lang.configure(highlightbackground=t["accent"], highlightcolor=t["accent"])
+                except: pass
+        b_to_skill = tk.Button(lang_row, text="Skill Tree \u2192", command=lambda: self.controller.show_frame(SkillTreePage), font=FONTS["caption"], padx=SP["sm"])
         b_to_skill.pack(side="right")
         style_button(b_to_skill, t, "secondary_btn_bg", "secondary_btn_hover")
         pace_row = tk.Frame(ctrl, bg=t["bg"])
