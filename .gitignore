@@ -43,7 +43,10 @@ run_dev.bat
 run_dev_windowed.bat
 run_forever.bat
 run_watch.bat
-.github/
+# Keep GitHub workflows for CI/Releases; ignore everything else in .github
+.github/*
+!.github/workflows
+!.github/workflows/**
 opencode.json
 
 # OS / IDE

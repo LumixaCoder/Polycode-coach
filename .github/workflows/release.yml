@@ -1,0 +1,190 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g., v1.0.0) — used for zip name when manually dispatched"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+
+      - name: Show version
+        run: |
+          python --version
+          python -m PyInstaller --version
+
+      - name: Build exe with PyInstaller
+        shell: pwsh
+        run: |
+          $sep = ";"
+          $hidden = @("lesson_data","languages.python.lessons","languages.python","languages.java.lessons","languages.java")
+          # Discover languages dynamically like build.py
+          if (Test-Path "languages") {
+            Get-ChildItem "languages" -Directory | Where-Object { Test-Path (Join-Path $_.FullName "lessons.py") } | ForEach-Object {
+              $lang = $_.Name
+              $hidden += "languages.$lang.lessons"
+              $hidden += "languages.$lang"
+            }
+          }
+          $hidden = $hidden | Sort-Object -Unique
+          Write-Host "Hidden imports: $($hidden -join ', ')"
+
+          $addData = @()
+          if (Test-Path "data") { $addData += "--add-data"; $addData += "data${sep}data" }
+          if (Test-Path "languages") { $addData += "--add-data"; $addData += "languages${sep}languages" }
+
+          $cmd = @("python","-m","PyInstaller","--noconfirm","--onedir","--name","PolycodeCoach","--windowed","--distpath","dist","--workpath","build","--specpath",".")
+          foreach ($h in $hidden) { $cmd += "--hidden-import"; $cmd += $h }
+          $cmd += $addData
+          $cmd += "lumixa.py"
+          Write-Host "Running: $($cmd -join ' ')"
+          & $cmd[0] $cmd[1..($cmd.Length-1)]
+          if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed $LASTEXITCODE" }
+
+          # Post-steps mirroring build.py: ensure data/ and languages/ are in DIST for fallback
+          $DIST = "dist/PolycodeCoach"
+          if (Test-Path "data") {
+            $src = "data"
+            $dst1 = Join-Path $DIST "data"
+            $dst2 = Join-Path $DIST "_internal/data"
+            Write-Host "Copy data -> $dst1 and $dst2"
+            New-Item -ItemType Directory -Force -Path $dst1 | Out-Null
+            Copy-Item -Path "$src/*" -Destination $dst1 -Recurse -Force
+            New-Item -ItemType Directory -Force -Path $dst2 | Out-Null
+            Copy-Item -Path "$src/*" -Destination $dst2 -Recurse -Force -ErrorAction SilentlyContinue
+          }
+          if (Test-Path "languages") {
+            $src = "languages"
+            $dst1 = Join-Path $DIST "languages"
+            $dst2 = Join-Path $DIST "_internal/languages"
+            Write-Host "Copy languages -> $dst1 and $dst2"
+            New-Item -ItemType Directory -Force -Path $dst1 | Out-Null
+            Copy-Item -Path "$src/*" -Destination $dst1 -Recurse -Force -Exclude "__pycache__"
+            New-Item -ItemType Directory -Force -Path $dst2 | Out-Null
+            Copy-Item -Path "$src/*" -Destination $dst2 -Recurse -Force -Exclude "__pycache__" -ErrorAction SilentlyContinue
+          }
+          Get-ChildItem $DIST | Format-Table Name, Length
+
+      - name: Bundle embed Python runtime
+        shell: pwsh
+        run: |
+          $PY_VERSION = "3.13.14"
+          $EMBED_URL = "https://www.python.org/ftp/python/$PY_VERSION/python-$PY_VERSION-embed-amd64.zip"
+          $zipPath = "$env:TEMP\python-$PY_VERSION-embed-amd64.zip"
+          $extractTmp = "$env:TEMP\pycoach_embed\$PY_VERSION"
+          if (-not (Test-Path "$extractTmp\python.exe")) {
+            if (-not (Test-Path $zipPath)) {
+              Write-Host "Downloading embed Python $PY_VERSION ..."
+              Invoke-WebRequest -Uri $EMBED_URL -OutFile $zipPath
+            }
+            if (Test-Path $extractTmp) { Remove-Item $extractTmp -Recurse -Force -ErrorAction SilentlyContinue }
+            Expand-Archive -Path $zipPath -DestinationPath $extractTmp -Force
+          }
+          $DIST = "dist/PolycodeCoach"
+          $runtimeDst = Join-Path $DIST "runtime"
+          New-Item -ItemType Directory -Force -Path $runtimeDst | Out-Null
+          Copy-Item -Path "$extractTmp\*" -Destination $runtimeDst -Recurse -Force
+          Write-Host "Runtime bundled to $runtimeDst"
+          Get-ChildItem $runtimeDst | Select-Object -First 10 | Format-Table Name, Length
+
+      - name: Add launcher + README + build_info
+        shell: pwsh
+        run: |
+          $DIST = "dist/PolycodeCoach"
+          $tag = "${{ github.ref_name }}"
+          if ("${{ inputs.tag }}" -ne "") { $tag = "${{ inputs.tag }}" }
+          if (-not $tag) { $tag = "v1.0.0" }
+          # run.bat
+          Set-Content -Path (Join-Path $DIST "run.bat") -Value "@echo off`r`ncd /d `"%~dp0`"`r`nstart `"`" `"%~dp0PolycodeCoach.exe`"`r`n" -Encoding UTF8
+          # README.txt
+          $readme = @"
+          Polycode Coach
+          =====================
+
+          Run the app:
+            - Double-click PolycodeCoach.exe  (or run.bat)
+
+          Your progress is saved automatically to:
+            %APPDATA%\PolycodeCoach\learning_progress.json
+
+          The 'runtime' folder is a bundled Python interpreter used to run
+          your code inside the app's sandbox. Keep it next to PolycodeCoach.exe.
+          The 'data' and 'languages' folders contain datasets and lesson content.
+
+          Auto-update while coding:
+            - Run: python watch_build.py  (or double-click run_watch.bat in project root)
+            - Or:  python build.py --watch
+            Every time you save a .py or data/*.json, the app rebuilds automatically.
+          "@
+          Set-Content -Path (Join-Path $DIST "README.txt") -Value $readme -Encoding UTF8
+          # build_info.json
+          $info = @{
+            built_at = (Get-Date).ToUniversalTime().ToString("o")
+            tag = $tag
+            python_version = "3.13.14"
+            github_run = "${{ github.run_id }}"
+          } | ConvertTo-Json -Depth 3
+          Set-Content -Path (Join-Path $DIST "build_info.json") -Value $info -Encoding UTF8
+          Write-Host "Wrote run.bat, README.txt, build_info.json for $tag"
+          Get-Content (Join-Path $DIST "build_info.json")
+
+      - name: Create zip
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          if ("${{ inputs.tag }}" -ne "") { $tag = "${{ inputs.tag }}" }
+          if (-not $tag) { $tag = "v1.0.0" }
+          # Normalize tag to include v prefix for file name
+          if (-not $tag.StartsWith("v")) { $tag = "v$tag" }
+          $zipName = "PolycodeCoach-$tag.zip"
+          if (Test-Path $zipName) { Remove-Item $zipName -Force }
+          # Zip the PolycodeCoach folder with top-level folder preserved
+          Compress-Archive -Path "dist/PolycodeCoach" -DestinationPath $zipName -CompressionLevel Optimal -Force
+          Write-Host "Created $zipName : $((Get-Item $zipName).Length / 1MB) MB"
+          Get-Item $zipName | Format-Table Name, Length, LastWriteTime
+          # Also create checksum
+          $hash = (Get-FileHash $zipName -Algorithm SHA256).Hash
+          "$hash  $zipName" | Set-Content -Path "$zipName.sha256" -Encoding UTF8
+          Get-Content "$zipName.sha256"
+          # Save names for release step
+          "ZIP_NAME=$zipName" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "ZIP_SHA=$zipName.sha256" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ env.ZIP_NAME }}
+            ${{ env.ZIP_SHA }}
+          generate_release_notes: true
+          # Use tag that triggered workflow; if workflow_dispatch with input, use that
+          tag_name: ${{ inputs.tag != '' && inputs.tag || github.ref_name }}
+          # If tag doesn't exist (manual dispatch), create it; otherwise use existing
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
