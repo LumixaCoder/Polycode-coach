@@ -168,8 +168,7 @@ Tough ones to plan around:
 
 ## Project structure
 
-- `lumixa.py` — **USER EDITION — Polycode Coach** (clean, for users) — Tkinter app without hot-reload/watcher. This is what `build.py` freezes to `dist/PolycodeCoach/PolycodeCoach.exe`.
-- `learn_python_gui.py` — **DEV EDITION — Lumixa** (for you) — same app + **live hot-reload** (polls lesson_data + languages/*/lessons.py every ~1.5s) and `--watch` auto-watcher. Keep editing here; `lumixa.py` is generated from it.
+- `lumixa.py`  — Polycode Coach** (clean, for users) — Tkinter app without hot-reload/watcher. This is what `build.py` freezes to `dist/PolycodeCoach/PolycodeCoach.exe`.
 - `lesson_data.py` — backward-compat shim re-exporting `languages/python/lessons.py` (`from languages.python.lessons import build_lesson_sets`); edit Python lessons in `languages/python/lessons.py:1`, not here.
 - `languages/` — per-language lesson modules (`python/lessons.py` 37 lessons, `java/lessons.py` 36 lessons,
   add more by creating `languages/<new>/lessons.py` + entry in `SUPPORTED_LANGUAGES:3802`).
