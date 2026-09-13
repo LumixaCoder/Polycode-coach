@@ -8,7 +8,10 @@ from datetime import date, timedelta
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import learn_python_gui
+try:
+    import learn_python_gui
+except ImportError:
+    import lumixa as learn_python_gui  # GitHub user-only: lumixa is canonical
 
 
 class CodeEvaluatorTests(unittest.TestCase):
