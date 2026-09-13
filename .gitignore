@@ -25,9 +25,10 @@ learning_progress.json
 learning_progress.json.bak
 *.bak
 
-# Generated view — source of truth is learn_python_gui.py (15k monolith)
+# Generated view — source of truth is learn_python_gui.py (15k monolith) — DEV ONLY (kept locally, not on GitHub)
 # Regenerate: python _archive_modular_before_single_file/generate_modules.py
 app/
+learn_python_gui.py
 # keep the archived reference
 !_archive_modular_before_single_file/
 

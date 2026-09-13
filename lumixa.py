@@ -4278,7 +4278,32 @@ SP = {
 # Purpose: PROGRESS_FILE, DPI, watcher, _HOT_RELOAD, save/load_progress, default_progress, ensure_progress, level idx/skip, auto-complete, streak/heatmap/weekly
 #==============================================================================
 
+def _custom_path_pointer():
+    """File that stores user-chosen custom progress location, if any."""
+    try:
+        root = Path(os.environ.get("APPDATA", Path.home()))
+        return root / "PolycodeCoach" / "custom_path.txt"
+    except Exception:
+        return Path("custom_path.txt")
+
+
 def _default_progress_path():
+    # 1) Respect user-chosen custom location (Settings → File Location)
+    try:
+        pointer = _custom_path_pointer()
+        if pointer.is_file():
+            custom = pointer.read_text(encoding="utf-8").strip()
+            if custom:
+                p = Path(custom)
+                # ensure parent exists, fallback to default if not
+                try:
+                    p.parent.mkdir(parents=True, exist_ok=True)
+                except Exception:
+                    pass
+                if p.parent.is_dir():
+                    return p
+    except Exception:
+        pass
     root = Path(os.environ.get("APPDATA", Path.home()))
     folder = root / "PolycodeCoach"
     folder.mkdir(parents=True, exist_ok=True)
@@ -14547,6 +14572,7 @@ class SettingsPage(tk.Frame):
         self._focus_card(t)
         self._weekly_card(t)
         self._backup_card(t)
+        self._file_location_card(t)
         self._reset_card(t)
         self._restart_card(t)
 
@@ -14873,6 +14899,88 @@ class SettingsPage(tk.Frame):
                 messagebox.showerror("Import failed", str(exc), parent=self)
             except Exception:
                 pass
+
+    def _file_location_card(self, t):
+        """Let user choose where learning_progress.json lives (user decision)."""
+        body = self._card(t, "File location",
+                          "Choose where your progress file is saved. Default is %APPDATA%\\PolycodeCoach\\learning_progress.json. Pick any folder you control — the app will remember it.")
+        loc = str(getattr(self.controller, "progress_path", "")) or str(PROGRESS_FILE)
+        try:
+            is_custom = False
+            ptr = _custom_path_pointer()
+            if ptr.is_file():
+                custom = ptr.read_text(encoding="utf-8").strip()
+                if custom and Path(custom) == Path(loc):
+                    is_custom = True
+        except Exception:
+            is_custom = False
+        tk.Label(body, text=f"Current: {loc}", bg=t["panel"], fg=t["accent"] if is_custom else t["muted"],
+                 font=FONTS["caption_bold"], anchor="w", wraplength=640, justify="left").pack(fill="x", pady=(0, SP["sm"]))
+        tk.Label(body, text="Custom" if is_custom else "Default", bg=t["success_bg"] if is_custom else t["panel"],
+                 fg=t["success"] if is_custom else t["muted"], font=FONTS["caption"], anchor="w").pack(anchor="w", pady=(0, SP["sm"]))
+        row = tk.Frame(body, bg=t["panel"])
+        row.pack(fill="x", pady=(0, SP["sm"]))
+        def _choose():
+            try:
+                cur = str(getattr(self.controller, "progress_path", "")) or str(PROGRESS_FILE)
+                initdir = str(Path(cur).parent) if cur else str(Path.home())
+                initfile = Path(cur).name if cur else "learning_progress.json"
+                path = filedialog.asksaveasfilename(parent=self, title="Choose progress file location", defaultextension=".json", initialdir=initdir, initialfile=initfile, filetypes=[("JSON files", "*.json"), ("All files", "*.*")])
+                if not path:
+                    return
+                new_path = Path(path)
+                try:
+                    new_path.parent.mkdir(parents=True, exist_ok=True)
+                except Exception:
+                    pass
+                # copy current progress to new location
+                try:
+                    save_progress(new_path, self.controller.progress)
+                except Exception as exc:
+                    messagebox.showerror("Save failed", str(exc), parent=self)
+                    return
+                # remember choice
+                try:
+                    ptr = _custom_path_pointer()
+                    ptr.parent.mkdir(parents=True, exist_ok=True)
+                    ptr.write_text(str(new_path), encoding="utf-8")
+                except Exception:
+                    pass
+                self.controller.progress_path = new_path
+                show_toast(self.winfo_toplevel(), f"Location set: {new_path.name}", t)
+                self.refresh()
+            except Exception as exc:
+                try:
+                    messagebox.showerror("Location failed", str(exc), parent=self)
+                except Exception:
+                    pass
+        def _reset_default():
+            try:
+                ptr = _custom_path_pointer()
+                if ptr.is_file():
+                    ptr.unlink()
+                # also copy back to default?
+                default = Path(os.environ.get("APPDATA", Path.home())) / "PolycodeCoach" / "learning_progress.json"
+                try:
+                    default.parent.mkdir(parents=True, exist_ok=True)
+                    save_progress(default, self.controller.progress)
+                    self.controller.progress_path = default
+                except Exception:
+                    self.controller.progress_path = _default_progress_path()
+                show_toast(self.winfo_toplevel(), "Reset to default location", t)
+                self.refresh()
+            except Exception as exc:
+                try:
+                    messagebox.showerror("Reset failed", str(exc), parent=self)
+                except Exception:
+                    pass
+        b_choose = tk.Button(row, text="\U0001F4C1 Choose Location…", command=_choose, padx=SP["md"], pady=SP["xs"])
+        b_choose.pack(side="left", padx=(0, SP["sm"]))
+        style_button(b_choose, t, "accent", "accent_hover")
+        b_reset = tk.Button(row, text="Reset to Default", command=_reset_default, padx=SP["md"], pady=SP["xs"])
+        b_reset.pack(side="left")
+        style_button(b_reset, t, "secondary_btn_bg", "secondary_btn_hover")
+        tk.Label(body, text="Tip: Export still works for one-off backups; this setting changes where the app auto-saves every step.", bg=t["panel"], fg=t["muted"], font=FONTS["caption"], anchor="w", wraplength=640, justify="left").pack(fill="x", pady=(SP["xs"], SP["lg"]))
 
     def _reset_card(self, t):
         cur = current_language(self.controller.progress)

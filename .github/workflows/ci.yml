@@ -21,7 +21,6 @@ jobs:
           pip install pytest
       - name: py_compile (catch SyntaxErrors)
         run: |
-          python -m py_compile learn_python_gui.py
           python -m py_compile lumixa.py
           python -m py_compile build.py
           python -m py_compile watch_build.py
