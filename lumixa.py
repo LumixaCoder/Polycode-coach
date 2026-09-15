@@ -97,7 +97,7 @@ import time
 import tkinter as tk
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, ttk
 
 
 #==============================================================================
@@ -10720,20 +10720,53 @@ class PythonLearnerApp(tk.Tk):
         # Tabs hidden until Start Python/Java is clicked (no tabs for brand-new users)
         self._nav_tab_buttons = []
         self._fullscreen_btn = None
-        for txt, cmd in [
+        # --- Primary tabs (fit in 1060px) + More dropdown for secondary ---
+        primary = [
             ("\U0001F3E0 Main Menu", lambda: self.show_frame(LanguageSelectionPage)),
             ("\U0001F3E0 Learning", lambda: self.show_frame(LearningPage)),
+            ("\U0001F3AF Daily", lambda: self.show_frame(DailyChallengePage)),
+            ("\U0001F9E0 Memory", lambda: self.show_frame(MemoryModePage)),
+            ("\u2328 Sandbox", lambda: self.show_frame(SandboxPage)),
+            ("\U0001F4CA Progress", lambda: self.show_frame(ProgressPage)),
+            ("\u2699 Settings", lambda: self.show_frame(SettingsPage)),
+        ]
+        secondary = [
             ("\U0001F4DA Review", lambda: self.show_frame(ReviewQueuePage)),
             ("\U0001F3CB\uFE0F Drills", lambda: self.show_frame(DrillHubPage)),
             ("\U0001F333 Skill Tree", lambda: self.show_frame(SkillTreePage)),
-            ("\U0001F3AF Daily", lambda: self.show_frame(DailyChallengePage)),
-            ("🧠 Memory", lambda: self.show_frame(MemoryModePage)),
-            ("\u2328 Sandbox", lambda: self.show_frame(SandboxPage)),
             ("\U0001F3C6 Badges", lambda: self.show_frame(BadgesPage)),
-            ("\U0001F4CA Progress", lambda: self.show_frame(ProgressPage)),
-            ("\u2699 Settings", lambda: self.show_frame(SettingsPage)),
-            ("\u26F6 Fullscreen", self.toggle_fullscreen),
-        ]:
+            ("\U0001F5D3 Planning", lambda: self.show_frame(PlanningGuidePage)),
+        ]
+        for txt2, cmd in primary:
+            b = tk.Button(nav, text=txt2, command=cmd, bg=self.theme["navbar_bg"],
+                          fg=self.theme["navbar_text"], activebackground=self.theme["navbar_hover"],
+                          activeforeground=self.theme["navbar_text"], font=FONTS["nav_small"],
+                          bd=0, padx=SP["md"], pady=SP["sm"], cursor="hand2")
+            b.pack(side="right", padx=(0, SP["sm"]))
+            b.bind("<Enter>", lambda e, w=b: w.configure(bg=self.theme["navbar_hover"]))
+            b.bind("<Leave>", lambda e, w=b: w.configure(bg=self.theme["navbar_bg"]))
+            self._nav_tab_buttons.append(b)
+        fb = tk.Button(nav, text="\u26F6 Fullscreen", command=self.toggle_fullscreen, bg=self.theme["navbar_bg"],
+                       fg=self.theme["navbar_text"], activebackground=self.theme["navbar_hover"],
+                       activeforeground=self.theme["navbar_text"], font=FONTS["nav_small"],
+                       bd=0, padx=SP["md"], pady=SP["sm"], cursor="hand2")
+        fb.pack(side="right", padx=(0, SP["sm"]))
+        fb.bind("<Enter>", lambda e, w=fb: w.configure(bg=self.theme["navbar_hover"]))
+        fb.bind("<Leave>", lambda e, w=fb: w.configure(bg=self.theme["navbar_bg"]))
+        self._nav_tab_buttons.append(fb)
+        self._fullscreen_btn = fb
+        more_btn = tk.Menubutton(nav, text="More \u25BE", bg=self.theme["navbar_bg"], fg=self.theme["navbar_text"],
+                                 activebackground=self.theme["navbar_hover"], activeforeground=self.theme["navbar_text"],
+                                 font=FONTS["nav_small"], bd=0, padx=SP["md"], pady=SP["sm"], cursor="hand2", relief="flat")
+        more_btn.pack(side="right", padx=(0, SP["sm"]))
+        more_menu = tk.Menu(more_btn, tearoff=0, bg=self.theme["panel"], fg=self.theme["text"], font=FONTS["body_sm"])
+        for label, command in secondary:
+            more_menu.add_command(label=label, command=command)
+        more_btn.configure(menu=more_menu)
+        self._nav_tab_buttons.append(more_btn)
+        if False:
+            for txt, cmd in []:
+                pass
             b = tk.Button(nav, text=txt, command=cmd, bg=self.theme["navbar_bg"],
                           fg=self.theme["navbar_text"], activebackground=self.theme["navbar_hover"],
                           activeforeground=self.theme["navbar_text"], font=FONTS["nav_small"],
@@ -12581,6 +12614,20 @@ class ProgressPage(tk.Frame):
                 b.pack(side="right")
         tk.Label(card.content, text="", bg=t["panel"]).pack()
 
+
+    def _tab_scrolled(self, parent, t):
+        """Create a scrollable inner frame inside a notebook tab."""
+        canvas = tk.Canvas(parent, bg=t["bg"], highlightthickness=0)
+        scrollbar = tk.Scrollbar(parent, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        inner = tk.Frame(canvas, bg=t["bg"])
+        canvas.create_window((0, 0), window=inner, anchor="nw")
+        inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        _enable_mousewheel(canvas, inner)
+        return inner
+
     def refresh(self):
         for w in self.winfo_children():
             w.destroy()
@@ -12590,25 +12637,14 @@ class ProgressPage(tk.Frame):
         lesson_sets = self._get_lesson_sets()
         level = p.get("level", "")
 
-        inner = self._scrolled(t)
-
-        tk.Label(inner, text="Your Progress", bg=t["bg"], fg=t["text"],
-                 font=FONTS["heading_xl"], anchor="w").pack(anchor="w", padx=SP["xl"], pady=(SP["xl"], 0))
-        tk.Label(inner, text="PolycodeCoach journey:  Learn \u2192 Practice \u2192 Debug \u2192 Project \u2192 Recall (Memory) \u2192 Review \u2192 Master", bg=t["tip_bg"], fg=t["tip_text"], font=FONTS["caption_bold"], anchor="w").pack(anchor="w", padx=SP["xl"], pady=(SP["xs"],0))
-        tk.Label(inner, text="A snapshot of everything you've accomplished so far.",
-                 bg=t["bg"], fg=t["text_secondary"], font=FONTS["body_sm"], anchor="w"
-                 ).pack(anchor="w", padx=SP["xl"], pady=(SP["xs"], 0))
-
-        guide_row = tk.Frame(inner, bg=t["bg"])
-        guide_row.pack(fill="x", padx=SP["xl"], pady=(SP["sm"], 0))
-        guide_btn = tk.Button(guide_row, text="\U0001F5D3 Planning Guide (Optional) \u2192", command=lambda: self.controller.show_frame(PlanningGuidePage), font=FONTS["button_sm"])
-        guide_btn.pack(anchor="w")
-        style_button(guide_btn, t, "secondary_btn_bg", "secondary_btn_hover")
-        tk.Label(guide_row, text="Not required \u2014 just a loose schedule if you want one. All lessons stay unlocked.",
-                 bg=t["bg"], fg=t["muted"], font=FONTS["caption"], anchor="w").pack(anchor="w", pady=(SP["xs"], 0))
-
-        stats_row = tk.Frame(inner, bg=t["bg"])
-        stats_row.pack(fill="x", padx=SP["xl"], pady=SP["lg"])
+        # Header stays above notebook (always visible)
+        hdr = tk.Frame(self, bg=t["bg"])
+        hdr.pack(fill="x", padx=SP["xl"], pady=(SP["lg"], SP["xs"]))
+        tk.Label(hdr, text="Your Progress", bg=t["bg"], fg=t["text"], font=FONTS["heading_xl"], anchor="w").pack(anchor="w")
+        tk.Label(hdr, text="PolycodeCoach journey:  Learn \u2192 Practice \u2192 Debug \u2192 Project \u2192 Recall (Memory) \u2192 Review \u2192 Master", bg=t["tip_bg"], fg=t["tip_text"], font=FONTS["caption_bold"], anchor="w").pack(anchor="w", pady=(SP["xs"],0))
+        # Quick stats row (shared)
+        stats_row = tk.Frame(self, bg=t["bg"])
+        stats_row.pack(fill="x", padx=SP["xl"], pady=SP["sm"])
         self._chip(stats_row, "XP", str(p.get("xp", 0)), t["accent"], t)
         self._chip(stats_row, "Streak", f"{p.get('streak', 0)} day" + ("s" if p.get("streak", 0) != 1 else ""), t["streak_text"], t)
         roadmap = level if level else "Not placed yet"
@@ -12616,11 +12652,43 @@ class ProgressPage(tk.Frame):
         step_total = sum(1 for v in p.get("completed_steps", {}).values() if v)
         self._chip(stats_row, "Steps done", str(step_total), t["success"], t)
 
+        # Notebook — 5 tabs fit comfortably in 740px height
+        style = ttk.Style()
+        try:
+            style.theme_use("clam")
+            style.configure("TNotebook", background=t["bg"], borderwidth=0)
+            style.configure("TNotebook.Tab", font=FONTS["caption_bold"], padding=[SP["md"], SP["xs"]])
+            style.map("TNotebook.Tab", background=[("selected", t["panel"]), ("!selected", t["bg"])], foreground=[("selected", t["accent"]), ("!selected", t["muted"])])
+        except Exception:
+            pass
+        nb = ttk.Notebook(self)
+        nb.pack(fill="both", expand=True, padx=SP["xl"], pady=(SP["sm"], SP["md"]))
+
+        # Create 5 tabs
+        tab_overview = tk.Frame(nb, bg=t["bg"])
+        tab_activity = tk.Frame(nb, bg=t["bg"])
+        tab_reflex = tk.Frame(nb, bg=t["bg"])
+        tab_mistakes = tk.Frame(nb, bg=t["bg"])
+        tab_retention = tk.Frame(nb, bg=t["bg"])
+        nb.add(tab_overview, text="  Overview  ")
+        nb.add(tab_activity, text="  Activity  ")
+        nb.add(tab_reflex, text="  Reflex  ")
+        nb.add(tab_mistakes, text="  Mistakes  ")
+        nb.add(tab_retention, text="  Retention  ")
+
+        # Build each tab with its own scroll
+        self._build_overview_tab(tab_overview, t, p, lesson_sets, level)
+        self._build_activity_tab(tab_activity, t, p, lesson_sets)
+        self._build_reflex_tab(tab_reflex, t, p, lesson_sets)
+        self._build_mistakes_tab(tab_mistakes, t, p, lesson_sets)
+        self._build_retention_tab(tab_retention, t, p, lesson_sets)
+
+    def _build_overview_tab(self, parent, t, p, lesson_sets, level):
+        inner = self._tab_scrolled(parent, t)
         if level:
             self._section_title(inner, "\U0001F9D1\u200D\u2699\uFE0F  Adaptive coach", t)
             adv = adaptive_path(p, lesson_sets, level)
             self._adaptive_panel(inner, adv, t)
-
         rows, _total_done, _total_all = level_roadmap_stats(p, lesson_sets)
         self._section_title(inner, "\U0001F6E3  Level journey", t)
         for r in rows:
@@ -12628,22 +12696,17 @@ class ProgressPage(tk.Frame):
             row.pack(fill="x", padx=SP["xl"], pady=SP["xs"])
             row.content.configure(bg=t["panel"])
             ind = {"current": "\u25B6", "done": "\u2713", "locked": "\u25CB"}[r["stage"]]
-            color = {"Beginner": t["badge_beginner"], "Intermediate": t["badge_intermediate"],
-                     "Advanced": t["badge_advanced"]}[r["level"]]
+            color = {"Beginner": t["badge_beginner"], "Intermediate": t["badge_intermediate"], "Advanced": t["badge_advanced"]}[r["level"]]
             fg = color if r["stage"] in ("current", "done") else t["muted"]
-            tk.Label(row.content, text=ind, bg=t["panel"], fg=fg, font=FONTS["body_bold"],
-                     width=2, anchor="w").pack(side="left", padx=(SP["sm"], 0))
-            tk.Label(row.content, text=r["level"], bg=t["panel"], fg=fg,
-                     font=FONTS["badge"], anchor="w").pack(side="left", padx=SP["sm"])
+            tk.Label(row.content, text=ind, bg=t["panel"], fg=fg, font=FONTS["body_bold"], width=2, anchor="w").pack(side="left", padx=(SP["sm"], 0))
+            tk.Label(row.content, text=r["level"], bg=t["panel"], fg=fg, font=FONTS["badge"], anchor="w").pack(side="left", padx=SP["sm"])
             bar_row = tk.Frame(row.content, bg=t["panel"])
             bar_row.pack(side="left", fill="x", expand=True, padx=SP["lg"])
-            tk.Label(bar_row, text=f"{r['done']}/{r['total']}",
-                     bg=t["panel"], fg=t["muted"], font=FONTS["caption"], anchor="w").pack(side="right")
+            tk.Label(bar_row, text=f"{r['done']}/{r['total']}", bg=t["panel"], fg=t["muted"], font=FONTS["caption"], anchor="w").pack(side="right")
             bar = RoundedProgress(bar_row, theme=t, color=color, height=7)
             bar.pack(fill="x", expand=True)
             pct = (r["done"] / r["total"]) if r["total"] else 0
             bar.draw(pct)
-
         if level and level in lesson_sets and lesson_sets.get(level):
             up = unit_progress(p, lesson_sets, level)
             if len(up) > 1 or (up and up[0]["total"] > 0):
@@ -12652,15 +12715,12 @@ class ProgressPage(tk.Frame):
                     row = RoundedCard(inner, theme=t, page_bg=t["bg"], pad=SP["lg"])
                     row.pack(fill="x", padx=SP["xl"], pady=SP["xs"])
                     row.content.configure(bg=t["panel"])
-                    tk.Label(row.content, text=u["unit"], bg=t["panel"], fg=t["text"],
-                             font=FONTS["body_sm"], anchor="w").pack(side="left", padx=SP["sm"])
-                    tk.Label(row.content, text=f"{u['done']}/{u['total']}", bg=t["panel"],
-                             fg=t["muted"], font=FONTS["caption"], anchor="w").pack(side="right", padx=SP["sm"])
+                    tk.Label(row.content, text=u["unit"], bg=t["panel"], fg=t["text"], font=FONTS["body_sm"], anchor="w").pack(side="left", padx=SP["sm"])
+                    tk.Label(row.content, text=f"{u['done']}/{u['total']}", bg=t["panel"], fg=t["muted"], font=FONTS["caption"], anchor="w").pack(side="right", padx=SP["sm"])
                     bar = RoundedProgress(row.content, theme=t, color=t["success"], height=6)
                     bar.pack(fill="x", expand=True, pady=(SP["sm"], 0))
                     pct = (u["done"] / u["total"]) if u["total"] else 0
                     bar.draw(pct)
-
         if level and level in lesson_sets:
             snap = lesson_progress_snapshot(p, lesson_sets, level)
             self._section_title(inner, f"\U0001F4CB {level} lessons \u2014 organized by unit", t)
@@ -12668,25 +12728,17 @@ class ProgressPage(tk.Frame):
             for s in snap:
                 if s["unit"] and s["unit"] != current_unit:
                     current_unit = s["unit"]
-                    tk.Label(inner, text="\u25B8  " + current_unit, bg=t["bg"],
-                             fg=t["accent"], font=FONTS["heading_sm"], anchor="w"
-                             ).pack(anchor="w", padx=SP["xl"], pady=(SP["sm"], 0))
+                    tk.Label(inner, text="\u25B8  " + current_unit, bg=t["bg"], fg=t["accent"], font=FONTS["heading_sm"], anchor="w").pack(anchor="w", padx=SP["xl"], pady=(SP["sm"], 0))
                 row = RoundedCard(inner, theme=t, page_bg=t["bg"], pad=SP["lg"])
                 row.pack(fill="x", padx=SP["xl"], pady=SP["xs"])
                 row.content.configure(bg=t["panel"])
                 done_flag = "\u2713 " if s["lesson_done"] else f"{s['index'] + 1}. "
-                tk.Label(row.content, text=done_flag + s["title"], bg=t["panel"],
-                         fg=t["text"] if not s["lesson_done"] else t["success"],
-                         font=FONTS["body_bold"], anchor="w").pack(side="left", padx=SP["sm"])
-                tk.Label(row.content, text=f"{s['done_steps']}/{s['total_steps']} steps" +
-                         ("  \u2713 project" if s["project_done"] else ""),
-                         bg=t["panel"], fg=t["muted"], font=FONTS["caption"], anchor="w").pack(side="right", padx=SP["sm"])
-                bar = RoundedProgress(row.content, theme=t,
-                                      color=t["success"] if s["lesson_done"] else t["accent"], height=5)
+                tk.Label(row.content, text=done_flag + s["title"], bg=t["panel"], fg=t["text"] if not s["lesson_done"] else t["success"], font=FONTS["body_bold"], anchor="w").pack(side="left", padx=SP["sm"])
+                tk.Label(row.content, text=f"{s['done_steps']}/{s['total_steps']} steps" + ("  \u2713 project" if s["project_done"] else ""), bg=t["panel"], fg=t["muted"], font=FONTS["caption"], anchor="w").pack(side="right", padx=SP["sm"])
+                bar = RoundedProgress(row.content, theme=t, color=t["success"] if s["lesson_done"] else t["accent"], height=5)
                 bar.pack(fill="x", expand=True, pady=(SP["sm"], 0))
                 pct = (s["done_steps"] / s["total_steps"]) if s["total_steps"] else 0
                 bar.draw(pct)
-
             self._section_title(inner, "\U0001F9E0  Skills you can use now", t)
             skills = skill_checklist(p, lesson_sets, level)
             wrap = tk.Frame(inner, bg=t["bg"])
@@ -12699,81 +12751,76 @@ class ProgressPage(tk.Frame):
                     card = RoundedCard(rowf, theme=t, fill=card_bg, page_bg=t["bg"], pad=SP["md"])
                     card.pack(side="left", fill="x", expand=True, padx=(0, SP["md"]))
                     card.content.configure(bg=card_bg)
-                    tk.Label(card.content, text=("\u2713 " if done else "\u25CB ") + label,
-                             bg=card_bg, fg=t["success"] if done else t["muted"],
-                             font=FONTS["body_sm"], anchor="w", wraplength=260, justify="left"
-                             ).pack(fill="x", padx=SP["lg"], pady=SP["sm"])
-
+                    tk.Label(card.content, text=("\u2713 " if done else "\u25CB ") + label, bg=card_bg, fg=t["success"] if done else t["muted"], font=FONTS["body_sm"], anchor="w", wraplength=260, justify="left").pack(fill="x", padx=SP["lg"], pady=SP["sm"])
             needs_review = [s for s in snap if s["lesson_done"] and not s["first_try"]]
             if needs_review:
                 self._section_title(inner, "\U0001F4A1 Worth a quick review", t)
                 for s in needs_review:
-                    tk.Label(inner, text="\u2022 " + s["title"] + f" \u2014 needed {s['attempts']} attempt(s)",
-                             bg=t["bg"], fg=t["warning"], font=FONTS["body_sm"], anchor="w"
-                             ).pack(anchor="w", padx=SP["xl"])
-
+                    tk.Label(inner, text="\u2022 " + s["title"] + f" \u2014 needed {s['attempts']} attempt(s)", bg=t["bg"], fg=t["warning"], font=FONTS["body_sm"], anchor="w").pack(anchor="w", padx=SP["xl"])
         due = due_reviews(p, lesson_sets)
         if due:
             self._section_title(inner, "\U0001F4DA  Review queue \u2014 due now", t)
             for r in due:
                 row = tk.Frame(inner, bg=t["panel"])
                 row.pack(fill="x", padx=SP["xl"], pady=3)
-                tk.Label(row, text="\u2022 " + r["title"], bg=t["panel"],
-                         fg=t["warning"], font=FONTS["body_sm"],
-                         anchor="w").pack(side="left", padx=SP["lg"])
-            tk.Label(inner, text="Open the Review tab to recall these.", bg=t["bg"],
-                     fg=t["muted"], font=FONTS["caption"], anchor="w"
-                     ).pack(anchor="w", padx=SP["xl"], pady=(0, SP["sm"]))
+                tk.Label(row, text="\u2022 " + r["title"], bg=t["panel"], fg=t["warning"], font=FONTS["body_sm"], anchor="w").pack(side="left", padx=SP["lg"])
+            tk.Label(inner, text="Open the Review tab to recall these.", bg=t["bg"], fg=t["muted"], font=FONTS["caption"], anchor="w").pack(anchor="w", padx=SP["xl"], pady=(0, SP["sm"]))
+        # Guide link
+        guide_row = tk.Frame(inner, bg=t["bg"])
+        guide_row.pack(fill="x", padx=SP["xl"], pady=SP["lg"])
+        guide_btn = tk.Button(guide_row, text="\U0001F5D3 Planning Guide (Optional) \u2192", command=lambda: self.controller.show_frame(PlanningGuidePage), font=FONTS["button_sm"])
+        guide_btn.pack(anchor="w")
+        style_button(guide_btn, t, "secondary_btn_bg", "secondary_btn_hover")
+        self._section_title(inner, "\u21BA  Starting over", t)
+        restart_row = tk.Frame(inner, bg=t["panel"])
+        restart_row.pack(fill="x", padx=SP["xl"], pady=(0, SP["xl"]))
+        restart_info = tk.Frame(restart_row, bg=t["panel"])
+        restart_info.pack(side="left", fill="x", expand=True, padx=SP["lg"])
+        tk.Label(restart_info, text="Restart from scratch", bg=t["panel"], fg=t["text"], font=FONTS["body_bold"], anchor="w").pack(fill="x", pady=(SP["md"], 0))
+        tk.Label(restart_info, text="Clears your level, lessons, XP, streak, reviews, and projects.", bg=t["panel"], fg=t["muted"], font=FONTS["body_sm"], anchor="w", wraplength=560, justify="left").pack(fill="x", pady=(SP["xs"], SP["md"]))
+        restart_btn = tk.Button(restart_row, text="\u21BA Restart", font=FONTS["button"], command=self._confirm_restart, padx=SP["lg"], pady=SP["md"])
+        restart_btn.pack(side="right", padx=(SP["lg"], 0))
+        style_button(restart_btn, t, "danger_btn_bg", "danger_btn_hover")
 
+    def _build_activity_tab(self, parent, t, p, lesson_sets):
+        inner = self._tab_scrolled(parent, t)
         self._section_title(inner, "\u23F1  XP over time", t)
         chart_row = tk.Frame(inner, bg=t["panel"])
-        chart_row.pack(fill="x", padx=SP["xl"], pady=(0, SP["lg"]))
+        chart_row.pack(fill="x", padx=SP["xl"], pady=(0, SP["md"]))
         chart = tk.Canvas(chart_row, bg=t["panel"], height=170, highlightthickness=0)
         chart.pack(fill="x", padx=SP["lg"], pady=SP["lg"])
         series = daily_xp_series(p)
         if series:
-            tk.Label(chart_row, text="Last 14 days", bg=t["panel"], fg=t["muted"],
-                     font=FONTS["caption"], anchor="w").pack(anchor="w", padx=(SP["lg"], 0))
+            tk.Label(chart_row, text="Last 14 days", bg=t["panel"], fg=t["muted"], font=FONTS["caption"], anchor="w").pack(anchor="w", padx=(SP["lg"], 0))
         draw_xp_chart(chart, series, t)
-
-        # ---- Contribution heatmap (GitHub style) ----
         self._section_title(inner, "\U0001F5D3  Contribution heatmap", t)
         hm = p.get("heatmap_data", {}) or {}
         hm_row = tk.Frame(inner, bg=t["panel"])
-        hm_row.pack(fill="x", padx=SP["xl"], pady=(0, SP["lg"]))
+        hm_row.pack(fill="x", padx=SP["xl"], pady=(0, SP["md"]))
         if not hm:
-            tk.Label(hm_row, text="No activity yet — complete a step to light up your first square.",
-                     bg=t["panel"], fg=t["muted"], font=FONTS["body_sm"]).pack(anchor="w", padx=SP["lg"], pady=SP["lg"])
+            tk.Label(hm_row, text="No activity yet — complete a step to light up your first square.", bg=t["panel"], fg=t["muted"], font=FONTS["body_sm"]).pack(anchor="w", padx=SP["lg"], pady=SP["lg"])
         else:
-            # build a simple grid: 7 rows (Mon-Sun) x columns for weeks (last 20 weeks)
             try:
                 from datetime import date as _d, timedelta as _td
                 today = _d.today()
-                # find Monday of 20 weeks ago
                 start = today - _td(days=7*20 + today.weekday())
                 max_c = max(hm.values()) if hm else 1
                 def _color(count):
-                    if count <= 0:
-                        return t["progress_bg"]
-                    if count >= max_c:
-                        return t["accent"]
-                    if count >= max_c * 0.66:
-                        return t["accent_2"]
-                    if count >= max_c * 0.33:
-                        return t["success"]
+                    if count <= 0: return t["progress_bg"]
+                    if count >= max_c: return t["accent"]
+                    if count >= max_c * 0.66: return t["accent_2"]
+                    if count >= max_c * 0.33: return t["success"]
                     return t["badge_beginner"]
                 canv = tk.Canvas(hm_row, bg=t["panel"], height=110, highlightthickness=0)
                 canv.pack(fill="x", padx=SP["lg"], pady=SP["md"])
-                # month labels on top — SP-derived so ocean/forest scaling stays consistent
                 cell = SP["md"] + 2
                 gap = SP["xs"] - 1
                 x0 = 0
                 y0 = SP["lg"]
-                # draw cells
                 cur = start
                 col = 0
                 while cur <= today:
-                    r = cur.weekday()  # Mon=0
+                    r = cur.weekday()
                     c = col
                     iso = cur.isoformat()
                     cnt = int(hm.get(iso, 0) or 0)
@@ -12781,40 +12828,33 @@ class ProgressPage(tk.Frame):
                     x = x0 + c*(cell+gap)
                     y = y0 + r*(cell+gap)
                     canv.create_rectangle(x, y, x+cell, y+cell, fill=color, outline="")
-                    # tooltip via tag? skip for simplicity
                     if cur.weekday() == 6:
                         col += 1
                     cur += _td(days=1)
                 canv.create_text(2, 6, text="20 weeks  \u2022  darker = more activity", anchor="w", fill=t["muted"], font=FONTS["caption"])
                 canv.configure(scrollregion=canv.bbox("all"))
-                tk.Label(hm_row, text=f"Total days active: {len(hm)}  \u2022  best day: {max_c} activities",
-                         bg=t["panel"], fg=t["muted"], font=FONTS["caption"]).pack(anchor="w", padx=SP["lg"])
+                tk.Label(hm_row, text=f"Total days active: {len(hm)}  \u2022  best day: {max_c} activities", bg=t["panel"], fg=t["muted"], font=FONTS["caption"]).pack(anchor="w", padx=SP["lg"])
             except Exception:
                 tk.Label(hm_row, text="Heatmap unavailable.", bg=t["panel"], fg=t["muted"], font=FONTS["caption"]).pack(anchor="w", padx=SP["lg"])
-
-        # ---- Weekly quest progress ----
         self._section_title(inner, "\U0001F3AF  Weekly quest", t)
-        week = p.get("weekly_goal_week", "") or "—"
+        week = p.get("weekly_goal_week", "") or "\u2014"
         goal = int(p.get("weekly_goal", 5) or 5)
         prog = int(p.get("weekly_progress", 0) or 0)
         freezes = int(p.get("streak_freezes", 0) or 0)
         q_row = RoundedCard(inner, theme=t, page_bg=t["bg"], pad=SP["lg"])
-        q_row.pack(fill="x", padx=SP["xl"], pady=(0, SP["lg"]))
+        q_row.pack(fill="x", padx=SP["xl"], pady=(0, SP["md"]))
         q_row.content.configure(bg=t["panel"])
         pct = min(1.0, prog/goal if goal else 0)
         bar = RoundedProgress(q_row.content, theme=t, color=t["accent"], height=9)
         bar.pack(fill="x", padx=SP["lg"], pady=(SP["sm"], SP["sm"]))
         bar.draw(pct)
-        tk.Label(q_row.content, text=f"Week {week}: {prog}/{goal} activities  \u2022  {int(pct*100)}%  \u2022  Freezes: {freezes} \u2744\uFE0F",
-                 bg=t["panel"], fg=t["muted"], font=FONTS["caption"], anchor="w").pack(fill="x", padx=SP["lg"])
-        tk.Label(q_row.content, text="Do any activity (lesson, project, daily) to count — change goal in Settings.",
-                 bg=t["panel"], fg=t["muted"], font=FONTS["caption"], anchor="w").pack(fill="x", padx=SP["lg"], pady=(SP["xs"], SP["lg"]))
-
-        # ---- Completion certificate (per level) ----
+        tk.Label(q_row.content, text=f"Week {week}: {prog}/{goal} activities  \u2022  {int(pct*100)}%  \u2022  Freezes: {freezes} \u2744\uFE0F", bg=t["panel"], fg=t["muted"], font=FONTS["caption"], anchor="w").pack(fill="x", padx=SP["lg"])
+        tk.Label(q_row.content, text="Do any activity (lesson, project, daily) to count — change goal in Settings.", bg=t["panel"], fg=t["muted"], font=FONTS["caption"], anchor="w").pack(fill="x", padx=SP["lg"], pady=(SP["xs"], SP["lg"]))
         self._section_title(inner, "\U0001F393  Completion certificate", t)
         cert_row = RoundedCard(inner, theme=t, page_bg=t["bg"], pad=SP["lg"])
-        cert_row.pack(fill="x", padx=SP["xl"], pady=(0, SP["lg"]))
+        cert_row.pack(fill="x", padx=SP["xl"], pady=(0, SP["md"]))
         cert_row.content.configure(bg=t["panel"])
+        rows, _, _ = level_roadmap_stats(p, lesson_sets)
         has_beginner = any(r["level"] == "Beginner" and r["stage"] == "done" for r in rows)
         has_intermediate = any(r["level"] == "Intermediate" and r["stage"] == "done" for r in rows)
         has_advanced = any(r["level"] == "Advanced" and r["stage"] == "done" for r in rows)
@@ -12822,9 +12862,8 @@ class ProgressPage(tk.Frame):
             try:
                 from pathlib import Path as _P
                 import datetime as _dt
-                cert_text = f"Polycode Coach — Certificate of Completion\n\nLevel: {level_name}\nLearner XP: {p.get('xp',0)}\nStreak: {p.get('streak',0)} days\nDate: {_dt.date.today().isoformat()}\n\nCongratulations! You completed every lesson in {level_name}.\n"
+                cert_text = f"Lumixa — Certificate of Completion\\n\\nLevel: {level_name}\\nLearner XP: {p.get('xp',0)}\\nStreak: {p.get('streak',0)} days\\nDate: {_dt.date.today().isoformat()}\\n\\nCongratulations! You completed every lesson in {level_name}.\\n"
                 out = _P.home() / f"PythonCoach_Certificate_{level_name}.txt"
-                # also try Documents
                 try:
                     docs = _P.home() / "Documents" / f"PythonCoach_Certificate_{level_name}.txt"
                     docs.write_text(cert_text, encoding="utf-8")
@@ -12834,11 +12873,10 @@ class ProgressPage(tk.Frame):
                 show_toast(self.winfo_toplevel(), f"Certificate saved to {out}", t)
             except Exception as e:
                 show_toast(self.winfo_toplevel(), f"Certificate error: {e}", t)
-        # show earned status and button per level
         for lvl, done in [("Beginner", has_beginner), ("Intermediate", has_intermediate), ("Advanced", has_advanced)]:
             rowf = tk.Frame(cert_row.content, bg=t["panel"])
             rowf.pack(fill="x", padx=SP["lg"], pady=2)
-            tk.Label(rowf, text=("✓ " if done else "○ ") + lvl, bg=t["panel"], fg=t["success"] if done else t["muted"], font=FONTS["body_bold"]).pack(side="left")
+            tk.Label(rowf, text=("\u2713 " if done else "\u25CB ") + lvl, bg=t["panel"], fg=t["success"] if done else t["muted"], font=FONTS["body_bold"]).pack(side="left")
             if done:
                 b = tk.Button(rowf, text="Save certificate", command=lambda l=lvl: _make_cert(l), font=FONTS["button_sm"], padx=SP["sm"], pady=2)
                 style_button(b, t, "accent", "accent_hover")
@@ -12846,11 +12884,10 @@ class ProgressPage(tk.Frame):
             else:
                 tk.Label(rowf, text=" — finish all lessons in this level to unlock", bg=t["panel"], fg=t["muted"], font=FONTS["caption"]).pack(side="right")
         if not (has_beginner or has_intermediate or has_advanced):
-            tk.Label(cert_row.content, text="Complete a whole level to unlock its printable certificate (freeCodeCamp style).",
-                     bg=t["panel"], fg=t["muted"], font=FONTS["caption"], wraplength=500, justify="left").pack(fill="x", padx=SP["lg"], pady=(SP["xs"], SP["lg"]))
+            tk.Label(cert_row.content, text="Complete a whole level to unlock its printable certificate.", bg=t["panel"], fg=t["muted"], font=FONTS["caption"], wraplength=500, justify="left").pack(fill="x", padx=SP["lg"], pady=(SP["xs"], SP["lg"]))
 
-
-        # ===== Code Reflex Score — signature feature =====
+    def _build_reflex_tab(self, parent, t, p, lesson_sets):
+        inner = self._tab_scrolled(parent, t)
         try:
             self._section_title(inner, "\U0001F4AA  Code Reflex Score — your coding reflexes", t)
             reflex = compute_code_reflex(p, lesson_sets)
@@ -12886,10 +12923,11 @@ class ProgressPage(tk.Frame):
             for w in mem_row.winfo_children():
                 if isinstance(w, tk.Button):
                     style_button(w, t, "accent", "accent_hover")
-        except Exception as _e:
-            pass
+        except Exception:
+            tk.Label(inner, text="Reflex data unavailable.", bg=t["bg"], fg=t["muted"]).pack()
 
-        # ===== Mistake Analytics — personalized =====
+    def _build_mistakes_tab(self, parent, t, p, lesson_sets):
+        inner = self._tab_scrolled(parent, t)
         try:
             self._section_title(inner, "\U0001F50D  Mistake Analytics — your personal bug pattern", t)
             ma = p.get("mistake_analytics", {}) or {}
@@ -12933,9 +12971,10 @@ class ProgressPage(tk.Frame):
                     for entry in recent:
                         tk.Label(card.content, text=f'{entry.get("at","")} \u2014 {entry.get("cat","")} in {entry.get("lesson","")}', bg=t["panel"], fg=t["muted"], font=FONTS["caption"], anchor="w").pack(fill="x", padx=SP["lg"])
         except Exception:
-            pass
+            tk.Label(inner, text="Mistake data unavailable.", bg=t["bg"], fg=t["muted"]).pack()
 
-        # ===== Retention Tracking Dashboard =====
+    def _build_retention_tab(self, parent, t, p, lesson_sets):
+        inner = self._tab_scrolled(parent, t)
         try:
             self._section_title(inner, "\U0001F9E0  Retention Dashboard — what you still remember", t)
             data = retention_dashboard_data(p, lesson_sets)
@@ -12971,31 +13010,14 @@ class ProgressPage(tk.Frame):
                                 style_button(w, t, "warning", "warning_bg")
                     else:
                         tk.Label(row, text="OK", bg=row.cget("bg"), fg=t["muted"], font=FONTS["caption"], width=8, anchor="w").pack(side="left")
-                tk.Label(rcard.content, text="Retention = estimate of what you still recall (100% fresh \u2192 15% faded). Review when <70% or overdue. Powered by your spaced-repetition schedule.", bg=t["panel"], fg=t["muted"], font=FONTS["caption"], wraplength=600, justify="left").pack(fill="x", padx=SP["lg"], pady=(SP["sm"], SP["lg"]))
+                tk.Label(rcard.content, text="Retention = estimate of what you still recall (100% fresh \u2192 15% faded). Review when <70% or overdue.", bg=t["panel"], fg=t["muted"], font=FONTS["caption"], wraplength=600, justify="left").pack(fill="x", padx=SP["lg"], pady=(SP["sm"], SP["lg"]))
                 tk.Button(rcard.content, text="\U0001F4DA Open Review Queue", font=FONTS["button_sm"], command=lambda: self.controller.show_frame(ReviewQueuePage), padx=SP["md"], pady=SP["xs"]).pack(anchor="w", padx=SP["lg"], pady=(0, SP["md"]))
                 for w in rcard.content.winfo_children():
                     if isinstance(w, tk.Button) and "Review Queue" in w.cget("text"):
                         style_button(w, t, "secondary_btn_bg", "secondary_btn_hover")
         except Exception:
-            pass
+            tk.Label(inner, text="Retention data unavailable.", bg=t["bg"], fg=t["muted"]).pack()
 
-
-        self._section_title(inner, "\u21BA  Starting over", t)
-        restart_row = tk.Frame(inner, bg=t["panel"])
-        restart_row.pack(fill="x", padx=SP["xl"], pady=(0, SP["xl"]))
-        restart_info = tk.Frame(restart_row, bg=t["panel"])
-        restart_info.pack(side="left", fill="x", expand=True, padx=SP["lg"])
-        tk.Label(restart_info, text="Restart from scratch", bg=t["panel"], fg=t["text"],
-                 font=FONTS["body_bold"], anchor="w").pack(fill="x", pady=(SP["md"], 0))
-        tk.Label(restart_info,
-                 text="Clears your level, lessons, XP, streak, reviews, and projects. Handy if "
-                      "someone else wants to use the app or you want a brand-new run.",
-                 bg=t["panel"], fg=t["muted"], font=FONTS["body_sm"], anchor="w",
-                 wraplength=560, justify="left").pack(fill="x", pady=(SP["xs"], SP["md"]))
-        restart_btn = tk.Button(restart_row, text="\u21BA Restart", font=FONTS["button"],
-                                command=self._confirm_restart, padx=SP["lg"], pady=SP["md"])
-        restart_btn.pack(side="right", padx=(SP["lg"], 0))
-        style_button(restart_btn, t, "danger_btn_bg", "danger_btn_hover")
 
     def _confirm_restart(self):
         if messagebox.askyesno(
