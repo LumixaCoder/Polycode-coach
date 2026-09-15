@@ -91,6 +91,8 @@ import subprocess
 import sys
 import copy as _copy
 import tempfile
+import difflib
+import math
 import time
 import tkinter as tk
 from datetime import date, datetime, timedelta
@@ -3880,6 +3882,10 @@ def get_lesson_sets_for_language(language):
         sets = ensure_example_and_muscle_steps(sets)
     except Exception:
         pass
+    try:
+        sets = ensure_memory_steps(sets)
+    except Exception:
+        pass
     return sets
 
 # Keep original name for backward compat (tests import build_lesson_sets)
@@ -4449,6 +4455,11 @@ def default_progress():
         "muscle_mastered": {},
         "example_seen": {},
         "drill_reviews": {},
+        # --- PolycodeCoach v1.1: Memory Mode + Reflex + Mistake Analytics + Retention ---
+        "memory_stats": {"attempts": 0, "best_accuracy": 0.0, "avg_accuracy": 0.0, "total_score": 0, "history": []},
+        "mistake_analytics": {"counts": {}, "total": 0, "recent": []},
+        "typing_stats": {"samples": [], "avg_wpm": 0.0, "total_chars": 0, "total_time_s": 0.0},
+        "memory_attempts": [],
     }
 
 
@@ -5591,6 +5602,621 @@ def lesson_strength_desc(s, first_try, attempts):
     if attempts == 2:
         return "Got it on the second try"
     return "Could use a review"
+
+
+
+
+#==============================================================================
+# SECTION 05b — CODE REFLEX SCORE — SIGNATURE FEATURE
+# Original: new in v1.1
+# Purpose: compute_code_reflex() — composite 0-1000 score from syntax/speed/debug/quiz/project
+#==============================================================================
+
+def _grade_letter(pct):
+    """0-100 -> letter grade."""
+    if pct >= 90: return "A"
+    if pct >= 80: return "B+"
+    if pct >= 70: return "B"
+    if pct >= 60: return "C+"
+    if pct >= 50: return "C"
+    return "D"
+
+def _pct_to_grade(pct):
+    if pct >= 90: return "A"
+    if pct >= 80: return "A-"
+    if pct >= 70: return "B+"
+    if pct >= 60: return "B"
+    if pct >= 50: return "C"
+    if pct >= 40: return "D"
+    return "F"
+
+def compute_code_reflex(progress, lesson_sets=None):
+    """Code Reflex Score — PolycodeCoach signature metric (0-1000).
+
+    Components (each 0-100):
+      Syntax   — run success rate (sandbox ok vs error)
+      Speed    — typing WPM (measured samples) or fallback from XP velocity
+      Debugging— first-try rate on debug steps + error recovery
+      Quiz     — review interval mastery
+      Project  — final projects passed + first-try bonus
+
+    Overall = weighted avg *10 -> 0-1000.  Returns dict with overall, grade, and breakdown.
+    """
+    p = progress or {}
+    # --- Syntax: success rate from code_check_attempts + events vs errors inferred from mistake_analytics
+    attempts = p.get("code_check_attempts", {}) or {}
+    total_attempts = sum(len(v or []) for v in attempts.values())
+    successes = sum(sum(1 for v in (lst or []) if v) for lst in attempts.values())
+    # Also factor in mistake_analytics total as failed runs proxy
+    mistake_total = int((p.get("mistake_analytics", {}) or {}).get("total", 0) or 0)
+    # If we have no attempt data yet, assume 70 baseline so new user not 0
+    if total_attempts == 0:
+        # estimate from completed_steps vs expected attempts
+        done = sum(1 for v in (p.get("completed_steps", {}) or {}).values() if v)
+        if done > 0:
+            syntax_pct = min(92, 65 + done * 3)
+        else:
+            syntax_pct = 60  # newcomer baseline
+    else:
+        raw = (successes / total_attempts * 100) if total_attempts else 60
+        # blend with mistake penalty: each mistake slightly lowers, but not brutally
+        penalty = min(20, mistake_total * 0.8)
+        syntax_pct = max(10, min(98, raw - penalty * 0.2 + 5))
+
+    # --- Debugging: based on debug-type steps? Use performance_log first_try + fail counts
+    log = p.get("performance_log", {}) or {}
+    fail_counts = p.get("project_fail_counts", {}) or {}
+    # Debugging proxied by: projects that passed first-try vs those needing retries
+    proj_keys = [k for k,v in log.items() if v.get("project_passed")]
+    if proj_keys:
+        first_try_projects = sum(1 for k in proj_keys if log.get(k,{}).get("first_try"))
+        debug_pct = (first_try_projects / len(proj_keys) * 100) * 0.6 + 40
+        # penalty for repeated fails
+        avg_fails = sum(int(fail_counts.get(k,0) or 0) for k in proj_keys) / max(1,len(proj_keys))
+        debug_pct = max(15, debug_pct - min(25, avg_fails * 8))
+    else:
+        # No projects yet: use step success pattern
+        steps_done = len([v for v in (p.get("completed_steps",{}) or {}).values() if v])
+        debug_pct = 45 + min(40, steps_done * 4)
+        if total_attempts and successes/total_attempts < 0.5:
+            debug_pct -= 10
+    debug_pct = max(10, min(95, debug_pct))
+
+    # --- Speed: from typing_stats avg_wpm, or estimate from samples len
+    typing = p.get("typing_stats", {}) or {}
+    avg_wpm = float(typing.get("avg_wpm", 0) or 0)
+    samples = typing.get("samples", []) or []
+    if avg_wpm > 0 and samples:
+        # Map WPM to pct: 15 WPM=50, 30=75, 45=90, 60=100
+        if avg_wpm >= 60: speed_pct = 100
+        elif avg_wpm >= 45: speed_pct = 90 + (avg_wpm-45)/15*10
+        elif avg_wpm >= 30: speed_pct = 75 + (avg_wpm-30)/15*15
+        elif avg_wpm >= 15: speed_pct = 50 + (avg_wpm-15)/15*25
+        else: speed_pct = max(20, avg_wpm/15*50)
+    else:
+        # Estimate from XP velocity and completed steps: active learner -> ~35 WPM proxy
+        xp = int(p.get("xp",0) or 0)
+        done_steps = len([v for v in (p.get("completed_steps",{}) or {}).values() if v])
+        # Heuristic: each 100 XP ~ +5 WPM proxy, each 10 steps ~ +3
+        est_wpm = 22 + min(25, xp/100*5) + min(15, done_steps/10*3)
+        est_wpm = max(18, min(50, est_wpm))
+        # Convert same curve but slightly muted (since estimated)
+        if est_wpm >= 40: speed_pct = 70 + (est_wpm-40)/10*10
+        else: speed_pct = 45 + (est_wpm-15)/25*25
+        avg_wpm = round(est_wpm,1)
+    speed_pct = max(10, min(97, speed_pct))
+
+    # --- Quiz: mastery from reviews interval_idx
+    reviews = p.get("reviews", {}) or {}
+    if reviews:
+        idxs = [int(v.get("interval_idx",0) or 0) for v in reviews.values()]
+        max_idx = max(len(REVIEW_INTERVALS)-1, 1)
+        avg_idx = sum(idxs)/len(idxs) if idxs else 0
+        quiz_pct = 40 + (avg_idx / max_idx * 60)
+        # bonus if many reviews done
+        due = len([v for v in reviews.values() if v.get("interval_idx",0) > 0])
+        quiz_pct = min(95, quiz_pct + min(10, due))
+    else:
+        # Check lesson quiz history via completed lessons count
+        quiz_pct = 50
+        if total_attempts:
+            quiz_pct = max(40, min(75, syntax_pct*0.6 + 20))
+
+    # --- Project: fraction of projects passed + first_try bonus
+    lesson_sets = lesson_sets or {}
+    # Count total lessons across levels as project opportunities
+    total_projects = 0
+    try:
+        for lvl, lessons in (lesson_sets or {}).items():
+            total_projects += len(lessons or [])
+    except Exception:
+        total_projects = 20
+    if total_projects == 0:
+        total_projects = 20
+    passed = sum(1 for v in log.values() if v.get("project_passed"))
+    proj_pct = (passed / total_projects * 100) if total_projects else 0
+    # Scale so early progress not 0: 1 project ~35, 5~60, 10~80
+    if passed > 0 and proj_pct < 35:
+        proj_pct = 35 + min(40, passed*6)
+    # first-try bonus
+    if proj_keys:
+        ft = sum(1 for k in proj_keys if log.get(k,{}).get("first_try"))
+        proj_pct = min(97, proj_pct + ft*3)
+    proj_pct = max(5, min(98, proj_pct))
+    # Newcomer with no projects yet -> not 0, show 45 baseline so UI not discouraging
+    if passed == 0 and total_attempts == 0 and len(reviews)==0:
+        proj_pct = 45
+
+    # Weighted overall (syntax 25%, debug 20%, speed 15%, quiz 20%, project 20%)
+    overall_100 = syntax_pct*0.25 + debug_pct*0.20 + speed_pct*0.15 + quiz_pct*0.20 + proj_pct*0.20
+    overall_1000 = int(round(overall_100 * 10))
+    overall_1000 = max(80, min(998, overall_1000))  # avoid 0 or 1000 extremes for newcomer display
+    # Letter grade for overall
+    if overall_100 >= 90: grade = "A"
+    elif overall_100 >= 85: grade = "A-"
+    elif overall_100 >= 80: grade = "B+"
+    elif overall_100 >= 70: grade = "B"
+    elif overall_100 >= 60: grade = "C+"
+    elif overall_100 >= 50: grade = "C"
+    else: grade = "D"
+
+    return {
+        "score": overall_1000,
+        "grade": grade,
+        "pct": round(overall_100,1),
+        "breakdown": {
+            "syntax": {"pct": round(syntax_pct,1), "grade": _pct_to_grade(syntax_pct), "label": "Syntax"},
+            "debugging": {"pct": round(debug_pct,1), "grade": _pct_to_grade(debug_pct), "label": "Debugging"},
+            "speed": {"pct": round(speed_pct,1), "grade": _pct_to_grade(speed_pct), "label": "Speed", "wpm": round(avg_wpm,1)},
+            "quiz": {"pct": round(quiz_pct,1), "grade": _pct_to_grade(quiz_pct), "label": "Retention"},
+            "project": {"pct": round(proj_pct,1), "grade": _pct_to_grade(proj_pct), "label": "Projects"},
+        },
+        "total_attempts": total_attempts,
+        "successes": successes,
+    }
+
+def record_typing_sample(progress, chars, duration_s):
+    """Record a typing speed sample. chars ~ len(code), duration_s >0."""
+    try:
+        if duration_s <= 0 or chars <= 0:
+            return
+        wpm = (chars / 5) / (duration_s / 60)
+        # clamp insane values (paste vs typing)
+        wpm = max(5, min(180, wpm))
+        ts = progress.setdefault("typing_stats", {"samples": [], "avg_wpm": 0.0, "total_chars": 0, "total_time_s": 0.0})
+        # ensure keys
+        ts.setdefault("samples", [])
+        ts.setdefault("total_chars", 0)
+        ts.setdefault("total_time_s", 0.0)
+        ts["samples"].append({"wpm": round(wpm,1), "chars": chars, "secs": round(duration_s,2), "at": date.today().isoformat()})
+        # keep last 80 samples
+        if len(ts["samples"]) > 80:
+            ts["samples"] = ts["samples"][-80:]
+        ts["total_chars"] = int(ts.get("total_chars",0) or 0) + chars
+        ts["total_time_s"] = float(ts.get("total_time_s",0) or 0) + duration_s
+        # recompute avg_wpm as mean of samples (excluding outliers >120 if many)
+        vals = [s["wpm"] for s in ts["samples"] if 5 <= s["wpm"] <= 120]
+        if not vals:
+            vals = [s["wpm"] for s in ts["samples"]]
+        ts["avg_wpm"] = round(sum(vals)/len(vals),1) if vals else round(wpm,1)
+    except Exception:
+        pass
+
+#==============================================================================
+# SECTION 05c — MISTAKE ANALYTICS — PERSONALIZED LEARNING
+# Original: new in v1.1
+# Purpose: classify + track mistakes, recommend targeted practice
+#==============================================================================
+
+_MISTAKE_CATEGORIES = [
+    "Missing colon",
+    "Indentation error",
+    "NameError / typo",
+    "Missing return",
+    "Incorrect loop condition",
+    "Missing parentheses",
+    "String quotes",
+    "Type mismatch",
+    "Off-by-one / range",
+    "Logic / condition",
+    "Other syntax",
+    "Runtime error",
+]
+
+def _classify_mistake(error_text, code=""):
+    """Map a traceback/error + code to a human category for analytics."""
+    low = (error_text or "").lower()
+    c = (code or "")
+    # Most specific first
+    if "expected ':'" in low or "missing colon" in low or ("syntaxerror" in low and ":" in error_text and "colon" in low):
+        return "Missing colon"
+    if "expected an indented block" in low or "unexpected indent" in low or "unindent" in low or "indentationerror" in low:
+        return "Indentation error"
+    if "is not defined" in low or "nameerror" in low:
+        return "NameError / typo"
+    if "missing return" in low or ("return" in c.lower() and "none" in low):
+        # heuristic for missing return: function without return
+        if "def " in c and "return" not in c:
+            return "Missing return"
+        return "Missing return"
+    if "range" in low and ("off-by-one" in low or "range" in c):
+        # generic range error
+        pass
+    if "invalid syntax" in low and "(" in (error_text or "") and ")" in (error_text or ""):
+        return "Missing parentheses"
+    if "eol while scanning string literal" in low or "unterminated string" in low or "string literal" in low:
+        return "String quotes"
+    if "unsupported operand" in low or "typeerror" in low and ("str" in low or "int" in low):
+        return "Type mismatch"
+    if "indexerror" in low or "list index out of range" in low or "range" in low and "off" in low:
+        return "Off-by-one / range"
+    if "syntaxerror" in low:
+        # generic syntax fallback
+        if ":" not in c and ("for " in c or "if " in c or "def " in c or "while " in c):
+            return "Missing colon"
+        return "Other syntax"
+    if "valueerror" in low or "keyerror" in low or "zerodivision" in low or "attributeerror" in low:
+        return "Runtime error"
+    # Logic / condition heuristic
+    if "condition" in low or "false" in low:
+        return "Logic / condition"
+    # Check code cues if no strong error
+    if "for " in c and "range(" not in c and " in " not in c:
+        return "Incorrect loop condition"
+    if "def " in c and "return" not in c:
+        return "Missing return"
+    return "Other syntax"
+
+def record_mistake(progress, error_text, code="", lesson_title=""):
+    """Log a failed run into mistake_analytics for personalized recommendations."""
+    try:
+        cat = _classify_mistake(error_text, code)
+        ma = progress.setdefault("mistake_analytics", {"counts": {}, "total": 0, "recent": []})
+        ma.setdefault("counts", {})
+        ma.setdefault("recent", [])
+        ma["counts"][cat] = int(ma["counts"].get(cat, 0) or 0) + 1
+        ma["total"] = int(ma.get("total", 0) or 0) + 1
+        # Keep recent list (max 40) with date + category + lesson
+        entry = {"cat": cat, "at": date.today().isoformat(), "lesson": lesson_title[:40], "error": (error_text or "")[:120]}
+        ma["recent"].insert(0, entry)
+        if len(ma["recent"]) > 40:
+            ma["recent"] = ma["recent"][:40]
+    except Exception:
+        pass
+
+def mistake_analytics_summary(progress, top_n=5):
+    """Return sorted [(category, count), ...] most common first."""
+    try:
+        counts = (progress.get("mistake_analytics", {}) or {}).get("counts", {}) or {}
+        sorted_items = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)
+        return sorted_items[:top_n]
+    except Exception:
+        return []
+
+def recommended_practice_from_mistakes(progress, lesson_sets=None):
+    """Map top mistake categories to lesson topics for targeted practice.
+
+    Returns list of {topic, lesson_title, level, reason}
+    """
+    cats = [c for c,_ in mistake_analytics_summary(progress, top_n=3)]
+    if not cats:
+        return []
+    # Map categories -> keywords to match lesson titles/units
+    cat_to_keywords = {
+        "Missing colon": ["loops", "conditions", "functions"],
+        "Indentation error": ["loops", "conditions", "functions"],
+        "NameError / typo": ["variables", "functions", "built-in"],
+        "Missing return": ["functions", "returns"],
+        "Incorrect loop condition": ["loops", "range", "while"],
+        "Missing parentheses": ["built-in", "functions"],
+        "String quotes": ["strings", "methods"],
+        "Type mismatch": ["variables", "input", "conversion"],
+        "Off-by-one / range": ["loops", "range", "lists"],
+        "Logic / condition": ["conditions", "decisions", "logic"],
+        "Other syntax": ["built-in", "variables"],
+        "Runtime error": ["exception", "error", "handling"],
+    }
+    recs = []
+    lesson_sets = lesson_sets or {}
+    for cat in cats:
+        kws = cat_to_keywords.get(cat, [])
+        for lvl, lessons in (lesson_sets or {}).items():
+            for idx, les in enumerate(lessons):
+                title = les.get("title","")
+                unit = les.get("unit","")
+                low = (title+" "+unit).lower()
+                if any(kw in low for kw in kws):
+                    recs.append({"level": lvl, "lesson_idx": idx, "title": title, "unit": unit, "reason": cat})
+                    break
+            if recs and recs[-1]["reason"]==cat:
+                break
+    # Dedupe by title
+    seen=set()
+    uniq=[]
+    for r in recs:
+        if r["title"] not in seen:
+            uniq.append(r)
+            seen.add(r["title"])
+    return uniq[:3]
+
+#==============================================================================
+# SECTION 05d — RETENTION TRACKING — SPACED REPETITION DASHBOARD
+# Original: new in v1.1
+# Purpose: per-concept mastery + retention estimate + review recommendations
+#==============================================================================
+
+def _retention_estimate(interval_idx, days_since_review):
+    """Simple retention curve: starts at 100, decays with days_since / interval.
+
+    interval_idx -> interval days via REVIEW_INTERVALS.
+    Uses linear decay: 100 - days_since * (8/(interval+1)) so longer intervals decay slower.
+    """
+    try:
+        interval = REVIEW_INTERVALS[interval_idx] if 0 <= interval_idx < len(REVIEW_INTERVALS) else 7
+    except Exception:
+        interval = 7
+    # decay per day
+    per_day = 8.0 / max(1, interval)
+    # For intervals >=8, slower decay; for 1, faster
+    if interval >= 16:
+        per_day *= 0.5
+    elif interval >= 8:
+        per_day *= 0.7
+    retention = 100.0 - max(0, days_since_review) * per_day
+    # retention never <15, never >100
+    retention = max(15, min(100, retention))
+    return round(retention, 1)
+
+def retention_dashboard_data(progress, lesson_sets=None):
+    """Build retention rows for every scheduled review + unstarted lessons.
+
+    Returns list of dicts: {level, lesson_idx, title, unit, mastery, last_review, due, retention, days_overdue, recommended}
+    Sorted: overdue/most at-risk first.
+    """
+    lesson_sets = lesson_sets or {}
+    sched = progress.get("reviews", {}) or {}
+    perf = progress.get("performance_log", {}) or {}
+    out = []
+    today = date.today()
+    for lvl, lessons in (lesson_sets or {}).items():
+        for idx, les in enumerate(lessons):
+            key = review_key(lvl, idx)
+            entry = sched.get(key)
+            title = les.get("title","")
+            unit = les.get("unit","")
+            if entry:
+                due_str = entry.get("due","")
+                interval_idx = int(entry.get("interval_idx",0) or 0)
+                max_idx = max(len(REVIEW_INTERVALS)-1,1)
+                # Mastery: interval progress + first_try bonus
+                base = 40 + (interval_idx / max_idx * 50)
+                first_try = bool((perf.get(key, {}) or {}).get("first_try"))
+                if first_try:
+                    base += 10
+                mastery = max(5, min(100, round(base,1)))
+                # Last review = due - interval
+                try:
+                    interval_days = REVIEW_INTERVALS[interval_idx] if 0 <= interval_idx < len(REVIEW_INTERVALS) else 1
+                    due_d = date.fromisoformat(due_str) if due_str else today
+                    last_review_d = due_d - timedelta(days=interval_days)
+                    last_review = last_review_d.isoformat()
+                    days_since = (today - last_review_d).days
+                    # days overdue
+                    overdue = (today - due_d).days if due_d < today else 0
+                    overdue = max(0, overdue)
+                except Exception:
+                    last_review = due_str or ""
+                    days_since = 0
+                    overdue = 0
+                retention = _retention_estimate(interval_idx, max(0, days_since))
+                # If overdue, extra penalty
+                if overdue > 0:
+                    retention = max(10, retention - overdue*3)
+                recommended = (retention < 70) or (overdue > 0) or (mastery < 60)
+            else:
+                # Not yet scheduled: not started or just completed without review yet
+                # Check if lesson done via completed_by_level etc. If not done, skip or show as not started
+                # We show only if lesson is at least in current level progress snapshot as pending
+                # For dashboard completeness, show as 0 mastery, no retention
+                # Determine if lesson is completed at all
+                completed = False
+                try:
+                    completed = idx in set(_get_completed_for_level(progress, lvl))
+                except Exception:
+                    completed = False
+                if not completed:
+                    mastery = 0
+                    last_review = ""
+                    due = ""
+                    retention = 0
+                    overdue = 0
+                    recommended = False
+                    # Only show unstarted if we want full roadmap; filter later to keep dashboard focused
+                    # For now skip unstarted to avoid clutter — dashboard is review-focused
+                    continue
+                else:
+                    # Completed but review not yet scheduled (edge case)
+                    mastery = 35
+                    last_review = today.isoformat()
+                    due = (today + timedelta(days=1)).isoformat()
+                    retention = 92
+                    overdue = 0
+                    recommended = False
+            out.append({
+                "level": lvl, "lesson_idx": idx, "title": title, "unit": unit,
+                "mastery": mastery, "last_review": last_review, "due": due_str if entry else due,
+                "retention": retention, "days_overdue": overdue, "interval_idx": interval_idx if entry else 0,
+                "recommended": recommended,
+                "first_try": bool((perf.get(key, {}) or {}).get("first_try")) if entry else False,
+            })
+    # Sort: recommended first, then lowest retention
+    out.sort(key=lambda r: (0 if r["recommended"] else 1, r["retention"]))
+    return out
+
+
+#==============================================================================
+# SECTION 05e — MEMORY MODE — RECALL TRAINING
+# Original: new in v1.1
+# Purpose: timed recall challenges — see, hide, rewrite, score
+#==============================================================================
+
+MEMORY_DURATIONS = {"easy": 30, "medium": 20, "hard": 10}
+MEMORY_XP = {"easy": 5, "medium": 8, "hard": 12}
+
+def get_memory_challenges(progress=None, lesson_sets=None, level=None, count=10):
+    """Return list of recall challenges from lesson examples.
+
+    Each: {level, lesson_idx, title, unit, code, lines, difficulty}
+    """
+    lesson_sets = lesson_sets or {}
+    pool = []
+    for lvl, lessons in (lesson_sets or {}).items():
+        if level and lvl != level:
+            continue
+        for idx, les in enumerate(lessons):
+            code = (les.get("example") or "").strip()
+            if not code:
+                continue
+            # need 1-8 lines snippet (spec says 2 lines example, but allow up to 8)
+            lines = [l for l in code.splitlines() if l.strip()]
+            pool.append({
+                "level": lvl, "lesson_idx": idx,
+                "title": les.get("title",""), "unit": les.get("unit",""),
+                "code": code, "lines": len(lines),
+                "topic": les.get("topic",""),
+            })
+    # Prefer medium length (2-6 lines) shuffled
+    import random as _rnd
+    pool_sorted = sorted(pool, key=lambda x: abs(x["lines"]-4))
+    _rnd.shuffle(pool_sorted)
+    return pool_sorted[:count]
+
+def score_memory_attempt(target, typed):
+    """Score a recall attempt vs target. Returns dict with overall 0-1, char_acc, line_acc, grade."""
+    if target is None: target = ""
+    if typed is None: typed = ""
+    t = target.strip()
+    y = typed.strip()
+    if not t and not y:
+        return {"overall": 1.0, "char_acc": 1.0, "line_acc": 1.0, "matched": 0, "total": 0, "grade": "A", "feedback": "Empty — nothing to score."}
+    if not y:
+        return {"overall": 0.0, "char_acc": 0.0, "line_acc": 0.0, "matched": 0, "total": max(1,len(t.splitlines())), "grade": "F", "feedback": "No code typed."}
+    # Line accuracy
+    t_lines = [l.rstrip() for l in t.splitlines()]
+    y_lines = [l.rstrip() for l in y.splitlines()]
+    total = max(len(t_lines), len(y_lines), 1)
+    matched = sum(1 for a,b in zip(t_lines, y_lines) if a == b)
+    # Also account for extra/missing lines
+    line_acc = matched / total
+    # Char accuracy via difflib
+    try:
+        sm = difflib.SequenceMatcher(None, t, y)
+        char_acc = sm.ratio()
+    except Exception:
+        char_acc = 1.0 if t==y else 0.0
+    overall = line_acc*0.4 + char_acc*0.6
+    # Grade
+    if overall >= 0.95: grade="A"
+    elif overall >= 0.85: grade="B+"
+    elif overall >= 0.75: grade="B"
+    elif overall >= 0.60: grade="C"
+    elif overall >= 0.40: grade="D"
+    else: grade="F"
+    # Feedback
+    if overall >= 0.95:
+        fb="Perfect recall — you nailed every character!"
+    elif overall >= 0.80:
+        fb="Strong recall — minor differences (check spaces, quotes, colons)."
+    elif overall >= 0.60:
+        fb="Partial — you got the shape but missed details. Compare line by line."
+    else:
+        fb="Needs work — re-study the snippet, then retype slowly and exactly."
+    return {"overall": round(overall,3), "char_acc": round(char_acc,3), "line_acc": round(line_acc,3), "matched": matched, "total": total, "grade": grade, "feedback": fb}
+
+def record_memory_attempt(progress, target, typed, duration_key="medium", duration_s=None):
+    """Log a memory attempt and update memory_stats. Returns score dict."""
+    score = score_memory_attempt(target, typed)
+    try:
+        ma = progress.setdefault("memory_stats", {"attempts": 0, "best_accuracy": 0.0, "avg_accuracy": 0.0, "total_score": 0, "history": []})
+        ma["attempts"] = int(ma.get("attempts",0) or 0) + 1
+        acc = float(score["overall"])
+        if acc > float(ma.get("best_accuracy",0) or 0):
+            ma["best_accuracy"] = round(acc,3)
+        # running avg
+        prev_avg = float(ma.get("avg_accuracy",0) or 0)
+        n = int(ma["attempts"])
+        ma["avg_accuracy"] = round((prev_avg*(n-1) + acc)/n,3) if n>1 else round(acc,3)
+        # XP based on accuracy and difficulty
+        xp_map = MEMORY_XP
+        base_xp = int(xp_map.get(duration_key, 8) or 8)
+        if acc >= 0.95:
+            earned = base_xp
+        elif acc >= 0.80:
+            earned = max(3, base_xp-2)
+        elif acc >= 0.60:
+            earned = max(2, base_xp-4)
+        else:
+            earned = 1
+        ma["total_score"] = int(ma.get("total_score",0) or 0) + earned
+        hist = ma.setdefault("history", [])
+        hist.insert(0, {"at": date.today().isoformat(), "accuracy": acc, "grade": score["grade"], "duration": duration_key, "xp": earned})
+        if len(hist) > 50:
+            hist[:] = hist[:50]
+        # Also push to flat memory_attempts for backward compat
+        flat = progress.setdefault("memory_attempts", [])
+        flat.insert(0, {"accuracy": acc, "at": date.today().isoformat(), "grade": score["grade"]})
+        if len(flat) > 80:
+            flat[:] = flat[:80]
+        score["xp_earned"] = earned
+        score["duration_key"] = duration_key
+    except Exception:
+        pass
+    return score
+
+def ensure_memory_steps(lesson_sets):
+    """Inject a Memory Recall step into each lesson (after muscle) if missing.
+
+    Type 'memory': shows example for N seconds, hides, learner retypes.
+    Idempotent — won't double-inject.
+    """
+    try:
+        for lvl, lessons in (lesson_sets or {}).items():
+            for li, lesson in enumerate(lessons):
+                steps = lesson.get("steps") or []
+                has_mem = any(s.get("type") == "memory" for s in steps)
+                if has_mem:
+                    continue
+                base_code = (lesson.get("example") or "").strip()
+                if not base_code:
+                    continue
+                mem_step = {
+                    "type": "memory",
+                    "title": f"Memory: recall the {lesson.get('title','')} pattern",
+                    "instruction": "Study the snippet for up to 30 seconds (pick your time), then it hides. Retype it exactly from memory — every colon, indent, and quote counts.",
+                    "code": base_code,
+                    "starter_code": "# Retype from memory after it hides\n",
+                    "hint": "Focus on line starts: for/def/if need colons + indents. Strings need matching quotes.",
+                    "success_msg": "Recall scored! Perfect memory is built by doing this again tomorrow (spaced).",
+                }
+                # Insert after muscle if exists else before review
+                insert_at = len(steps)-1
+                for i,s in enumerate(steps):
+                    if s.get("type") == "muscle":
+                        insert_at = i+1
+                        break
+                last_type = steps[-1].get("type") if steps else ""
+                if last_type == "review" and insert_at == len(steps):
+                    insert_at = len(steps)-1
+                steps.insert(min(max(insert_at,1), len(steps)), mem_step)
+                lesson["steps"] = steps
+    except Exception:
+        pass
+    return lesson_sets
+
+
+#==============================================================================
+# (end of v1.1 feature blocks)
+#==============================================================================
 
 
 
@@ -10093,6 +10719,7 @@ class PythonLearnerApp(tk.Tk):
         # Text size (Aa) lives only in Settings → Default text size card
         # Tabs hidden until Start Python/Java is clicked (no tabs for brand-new users)
         self._nav_tab_buttons = []
+        self._fullscreen_btn = None
         for txt, cmd in [
             ("\U0001F3E0 Main Menu", lambda: self.show_frame(LanguageSelectionPage)),
             ("\U0001F3E0 Learning", lambda: self.show_frame(LearningPage)),
@@ -10100,6 +10727,7 @@ class PythonLearnerApp(tk.Tk):
             ("\U0001F3CB\uFE0F Drills", lambda: self.show_frame(DrillHubPage)),
             ("\U0001F333 Skill Tree", lambda: self.show_frame(SkillTreePage)),
             ("\U0001F3AF Daily", lambda: self.show_frame(DailyChallengePage)),
+            ("🧠 Memory", lambda: self.show_frame(MemoryModePage)),
             ("\u2328 Sandbox", lambda: self.show_frame(SandboxPage)),
             ("\U0001F3C6 Badges", lambda: self.show_frame(BadgesPage)),
             ("\U0001F4CA Progress", lambda: self.show_frame(ProgressPage)),
@@ -10114,6 +10742,8 @@ class PythonLearnerApp(tk.Tk):
             b.bind("<Enter>", lambda e, w=b: w.configure(bg=self.theme["navbar_hover"]))
             b.bind("<Leave>", lambda e, w=b: w.configure(bg=self.theme["navbar_bg"]))
             self._nav_tab_buttons.append(b)
+            if "Fullscreen" in txt or "Minimize" in txt:
+                self._fullscreen_btn = b
         # Hide tabs for brand-new users until they click Start Python/Java
         self._update_nav_visibility()
 
@@ -10135,7 +10765,7 @@ class PythonLearnerApp(tk.Tk):
         self.content.grid_columnconfigure(0, weight=1)
         self.frames = {}
 
-        for cls in (LanguageSelectionPage, WelcomePage, SurveyPage, ResultPage, ProgressPage, ReviewQueuePage, DrillHubPage, SkillTreePage, DailyChallengePage, LearningPage, BadgesPage, SandboxPage, SettingsPage, PlanningGuidePage):
+        for cls in (LanguageSelectionPage, WelcomePage, SurveyPage, ResultPage, ProgressPage, ReviewQueuePage, DrillHubPage, SkillTreePage, DailyChallengePage, LearningPage, BadgesPage, SandboxPage, SettingsPage, PlanningGuidePage, MemoryModePage):
             f = cls(self.content, self)
             self.frames[cls] = f
             f.grid(row=0, column=0, sticky="nsew")
@@ -10216,7 +10846,7 @@ class PythonLearnerApp(tk.Tk):
             pass
         self.frames[page].tkraise()
         self._last_page = page
-        if page in (LearningPage, ProgressPage, ReviewQueuePage, DrillHubPage, DailyChallengePage, SandboxPage, BadgesPage, SettingsPage, SkillTreePage, WelcomePage, LanguageSelectionPage, PlanningGuidePage):
+        if page in (LearningPage, ProgressPage, ReviewQueuePage, DrillHubPage, DailyChallengePage, SandboxPage, BadgesPage, SettingsPage, SkillTreePage, WelcomePage, LanguageSelectionPage, PlanningGuidePage, MemoryModePage):
             try:
                 self.frames[page].refresh()
             except Exception:
@@ -10402,11 +11032,31 @@ class PythonLearnerApp(tk.Tk):
     def toggle_fullscreen(self):
         self.fullscreen = not self.fullscreen
         self.attributes("-fullscreen", self.fullscreen)
+        self._update_fullscreen_button()
 
     def exit_fullscreen(self):
         if self.fullscreen:
             self.fullscreen = False
             self.attributes("-fullscreen", False)
+            self._update_fullscreen_button()
+
+    def _update_fullscreen_button(self):
+        """Update navbar button text to match fullscreen state: Fullscreen <-> Exit Fullscreen."""
+        btn = getattr(self, "_fullscreen_btn", None)
+        if btn is None:
+            return
+        try:
+            if not btn.winfo_exists():
+                return
+        except Exception:
+            return
+        try:
+            if self.fullscreen:
+                btn.configure(text="\U0001F5D5 Exit Fullscreen")
+            else:
+                btn.configure(text="\u26F6 Fullscreen")
+        except Exception:
+            pass
 
     def _toggle_theme_btn(self):
         nxt = "dark" if self.theme_name == "light" else "light"
@@ -10433,6 +11083,7 @@ class PythonLearnerApp(tk.Tk):
         for w in self.winfo_children():
             w.destroy()
         self._build_ui()
+        self._update_fullscreen_button()
         self.show_frame(self._current_page())
 
     def cycle_font_size(self):
@@ -10971,6 +11622,7 @@ class LanguageSelectionPage(tk.Frame):
             ("\U0001F4DA Continue Learning", LearningPage),
             ("\U0001F3AF Daily Challenge", DailyChallengePage),
             ("\U0001F4DA Review Queue", ReviewQueuePage),
+            ("\U0001F9E0 Memory Recall", MemoryModePage),
             ("\U0001F3C6 Badges", "BADGES"),
             ("\u2328 Sandbox", SandboxPage),
             ("\U0001F5D3 Planning Guide", PlanningGuidePage),
@@ -11309,6 +11961,12 @@ class WelcomePage(tk.Frame):
             )
             start_btn.pack(side="left", padx=(0, SP["md"]))
             style_button(start_btn, t, "accent", "accent_hover")
+
+        # Marketing vision — Learn->Master
+        vision = tk.Frame(inner, bg=t["tip_bg"], padx=SP["lg"], pady=SP["md"])
+        vision.pack(fill="x", padx=SP["xl"], pady=(SP["sm"],0))
+        tk.Label(vision, text="PolycodeCoach doesn\'t just teach coding. It trains coding reflexes through practice, debugging, projects, memory recall, and long-term retention — so you remember and apply what you learn.", bg=t["tip_bg"], fg=t["tip_text"], font=FONTS["body_sm"], wraplength=640, justify="left").pack(anchor="w")
+        tk.Label(vision, text="Learn \u2192 Practice \u2192 Debug \u2192 Project \u2192 Recall \u2192 Review \u2192 Master", bg=t["tip_bg"], fg=t["accent"], font=FONTS["caption_bold"], anchor="w").pack(anchor="w", pady=(SP["xs"],0))
 
         add_divider(inner, t, SP["xl"])
 
@@ -11936,6 +12594,7 @@ class ProgressPage(tk.Frame):
 
         tk.Label(inner, text="Your Progress", bg=t["bg"], fg=t["text"],
                  font=FONTS["heading_xl"], anchor="w").pack(anchor="w", padx=SP["xl"], pady=(SP["xl"], 0))
+        tk.Label(inner, text="PolycodeCoach journey:  Learn \u2192 Practice \u2192 Debug \u2192 Project \u2192 Recall (Memory) \u2192 Review \u2192 Master", bg=t["tip_bg"], fg=t["tip_text"], font=FONTS["caption_bold"], anchor="w").pack(anchor="w", padx=SP["xl"], pady=(SP["xs"],0))
         tk.Label(inner, text="A snapshot of everything you've accomplished so far.",
                  bg=t["bg"], fg=t["text_secondary"], font=FONTS["body_sm"], anchor="w"
                  ).pack(anchor="w", padx=SP["xl"], pady=(SP["xs"], 0))
@@ -12189,6 +12848,137 @@ class ProgressPage(tk.Frame):
         if not (has_beginner or has_intermediate or has_advanced):
             tk.Label(cert_row.content, text="Complete a whole level to unlock its printable certificate (freeCodeCamp style).",
                      bg=t["panel"], fg=t["muted"], font=FONTS["caption"], wraplength=500, justify="left").pack(fill="x", padx=SP["lg"], pady=(SP["xs"], SP["lg"]))
+
+
+        # ===== Code Reflex Score — signature feature =====
+        try:
+            self._section_title(inner, "\U0001F4AA  Code Reflex Score — your coding reflexes", t)
+            reflex = compute_code_reflex(p, lesson_sets)
+            rb = RoundedCard(inner, theme=t, page_bg=t["bg"], pad=SP["lg"])
+            rb.pack(fill="x", padx=SP["xl"], pady=(0, SP["md"]))
+            rb.content.configure(bg=t["panel"])
+            hdr = tk.Frame(rb.content, bg=t["panel"])
+            hdr.pack(fill="x", padx=SP["lg"], pady=(SP["lg"], SP["sm"]))
+            left = tk.Frame(hdr, bg=t["panel"])
+            left.pack(side="left")
+            tk.Label(left, text=str(reflex["score"]), bg=t["panel"], fg=t["accent"], font=("Segoe UI", 28, "bold")).pack(anchor="w")
+            tk.Label(left, text=f'Grade {reflex["grade"]}  \u00b7  {reflex["pct"]}% overall', bg=t["panel"], fg=t["muted"], font=FONTS["caption_bold"]).pack(anchor="w")
+            right = tk.Frame(hdr, bg=t["panel"])
+            right.pack(side="right")
+            tk.Label(right, text="Signature metric", bg=t["panel"], fg=t["accent"], font=FONTS["caption_bold"]).pack(anchor="e")
+            tk.Label(right, text="Syntax \u00b7 Speed \u00b7 Debug \u00b7 Quiz \u00b7 Project", bg=t["panel"], fg=t["muted"], font=FONTS["caption"]).pack(anchor="e")
+            for key in ["syntax","debugging","speed","quiz","project"]:
+                bd = reflex["breakdown"][key]
+                row = tk.Frame(rb.content, bg=t["panel"])
+                row.pack(fill="x", padx=SP["lg"], pady=2)
+                tk.Label(row, text=bd["label"], bg=t["panel"], fg=t["text"], font=FONTS["body_sm"], width=10, anchor="w").pack(side="left")
+                bar = RoundedProgress(row, theme=t, color=t["success"] if bd["pct"]>=75 else t["warning"] if bd["pct"]>=50 else t["error"], height=8)
+                bar.pack(side="left", fill="x", expand=True, padx=SP["sm"])
+                bar.draw(bd["pct"]/100)
+                extra = f'  {bd["grade"]}'
+                if key=="speed":
+                    extra = f'  {bd["grade"]} ({bd.get("wpm",0)} WPM)'
+                tk.Label(row, text=f'{bd["pct"]:.0f}%{extra}', bg=t["panel"], fg=t["muted"], font=FONTS["caption"], anchor="w").pack(side="left", padx=SP["sm"])
+            tk.Label(rb.content, text="Tip: Keep shipping lessons & projects — every run, debug fix, and review lifts your reflex.", bg=t["panel"], fg=t["muted"], font=FONTS["caption"], wraplength=600, justify="left").pack(fill="x", padx=SP["lg"], pady=(SP["sm"], SP["lg"]))
+            mem_row = tk.Frame(rb.content, bg=t["panel"])
+            mem_row.pack(fill="x", padx=SP["lg"], pady=(0, SP["sm"]))
+            tk.Button(mem_row, text="\U0001F9E0 Train Memory Mode \u2192", font=FONTS["button_sm"], command=lambda: self.controller.show_frame(MemoryModePage), padx=SP["md"], pady=SP["xs"]).pack(side="left")
+            for w in mem_row.winfo_children():
+                if isinstance(w, tk.Button):
+                    style_button(w, t, "accent", "accent_hover")
+        except Exception as _e:
+            pass
+
+        # ===== Mistake Analytics — personalized =====
+        try:
+            self._section_title(inner, "\U0001F50D  Mistake Analytics — your personal bug pattern", t)
+            ma = p.get("mistake_analytics", {}) or {}
+            counts = ma.get("counts", {}) or {}
+            total = int(ma.get("total",0) or 0)
+            card = RoundedCard(inner, theme=t, page_bg=t["bg"], pad=SP["lg"])
+            card.pack(fill="x", padx=SP["xl"], pady=(0, SP["md"]))
+            card.content.configure(bg=t["panel"])
+            if not counts or total==0:
+                tk.Label(card.content, text="No mistakes logged yet — keep coding! Every error you hit will appear here with a fix.", bg=t["panel"], fg=t["muted"], font=FONTS["body_sm"], wraplength=600, justify="left").pack(fill="x", padx=SP["lg"], pady=SP["lg"])
+            else:
+                top = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:5]
+                tk.Label(card.content, text=f"Most Common Errors  \u00b7  {total} total", bg=t["panel"], fg=t["text"], font=FONTS["body_bold"]).pack(anchor="w", padx=SP["lg"], pady=(SP["md"], SP["sm"]))
+                for cat, cnt in top:
+                    row = tk.Frame(card.content, bg=t["panel"])
+                    row.pack(fill="x", padx=SP["lg"], pady=2)
+                    tk.Label(row, text=f"\u2022 {cat}", bg=t["panel"], fg=t["text"], font=FONTS["body_sm"], anchor="w").pack(side="left")
+                    tk.Label(row, text=str(cnt), bg=t["panel"], fg=t["error"], font=FONTS["caption_bold"]).pack(side="right")
+                    bar = RoundedProgress(card.content, theme=t, color=t["error"], height=5)
+                    bar.pack(fill="x", padx=SP["lg"], pady=(0,2))
+                    bar.draw(min(1.0, cnt/max(1, top[0][1])))
+                recs = recommended_practice_from_mistakes(p, lesson_sets)
+                if recs:
+                    tk.Label(card.content, text="Recommended Practice (based on your bugs):", bg=t["panel"], fg=t["accent"], font=FONTS["caption_bold"]).pack(anchor="w", padx=SP["lg"], pady=(SP["md"], SP["xs"]))
+                    for r in recs:
+                        crow = tk.Frame(card.content, bg=t["card"], bd=1, relief="solid", padx=SP["md"], pady=SP["sm"])
+                        crow.pack(fill="x", padx=SP["lg"], pady=2)
+                        tk.Label(crow, text=r["title"], bg=t["card"], fg=t["text"], font=FONTS["body_bold"], anchor="w").pack(side="left")
+                        tk.Label(crow, text=r["level"], bg=t["card"], fg=t["muted"], font=FONTS["caption"]).pack(side="left", padx=SP["sm"])
+                        tk.Label(crow, text=f'because: {r["reason"]}', bg=t["card"], fg=t["warning"], font=FONTS["caption"]).pack(side="left", padx=SP["sm"])
+                        tk.Button(crow, text="Practice \u2192", font=FONTS["button_sm"], command=lambda lvl=r["level"], idx=r["lesson_idx"]: (self.controller.update_progress(level=lvl, lesson_index=idx, step_index=0), self.controller.show_frame(LearningPage)), padx=SP["md"], pady=SP["xs"]).pack(side="right")
+                        for w in crow.winfo_children():
+                            if isinstance(w, tk.Button):
+                                style_button(w, t, "secondary_btn_bg", "secondary_btn_hover")
+                    tk.Label(card.content, text="Fixing your top bug first gives the biggest reflex gain.", bg=t["panel"], fg=t["muted"], font=FONTS["caption"]).pack(anchor="w", padx=SP["lg"], pady=(SP["xs"], SP["lg"]))
+                else:
+                    tk.Label(card.content, text="Great — your mistakes are varied, not stuck on one pattern. Keep reviewing!", bg=t["panel"], fg=t["success"], font=FONTS["body_sm"]).pack(anchor="w", padx=SP["lg"], pady=SP["lg"])
+                recent = (ma.get("recent") or [])[:3]
+                if recent:
+                    tk.Label(card.content, text="Recent:", bg=t["panel"], fg=t["muted"], font=FONTS["caption_bold"]).pack(anchor="w", padx=SP["lg"], pady=(SP["sm"],0))
+                    for entry in recent:
+                        tk.Label(card.content, text=f'{entry.get("at","")} \u2014 {entry.get("cat","")} in {entry.get("lesson","")}', bg=t["panel"], fg=t["muted"], font=FONTS["caption"], anchor="w").pack(fill="x", padx=SP["lg"])
+        except Exception:
+            pass
+
+        # ===== Retention Tracking Dashboard =====
+        try:
+            self._section_title(inner, "\U0001F9E0  Retention Dashboard — what you still remember", t)
+            data = retention_dashboard_data(p, lesson_sets)
+            show = [r for r in data if r["retention"]>0][:10]
+            rcard = RoundedCard(inner, theme=t, page_bg=t["bg"], pad=SP["lg"])
+            rcard.pack(fill="x", padx=SP["xl"], pady=(0, SP["md"]))
+            rcard.content.configure(bg=t["panel"])
+            if not show:
+                tk.Label(rcard.content, text="No reviews scheduled yet — finish a lesson and your retention curve starts. Come back tomorrow to see decay & strength!", bg=t["panel"], fg=t["muted"], font=FONTS["body_sm"], wraplength=600, justify="left").pack(fill="x", padx=SP["lg"], pady=SP["lg"])
+            else:
+                hdr = tk.Frame(rcard.content, bg=t["panel"])
+                hdr.pack(fill="x", padx=SP["lg"], pady=(SP["md"], SP["sm"]))
+                for txt_h, w in [("Concept", 22), ("Mastery", 8), ("Last Review", 12), ("Retention", 10), ("Action", 10)]:
+                    tk.Label(hdr, text=txt_h, bg=t["panel"], fg=t["muted"], font=FONTS["caption_bold"], width=w, anchor="w").pack(side="left")
+                for r in show:
+                    row = tk.Frame(rcard.content, bg=t["card"] if not r["recommended"] else t["warning_bg"], bd=1, relief="solid")
+                    row.pack(fill="x", padx=SP["lg"], pady=1)
+                    tk.Label(row, text=r["title"][:22], bg=row.cget("bg"), fg=t["text"], font=FONTS["body_sm"], width=22, anchor="w").pack(side="left", padx=SP["xs"])
+                    tk.Label(row, text=f'{r["mastery"]:.0f}%', bg=row.cget("bg"), fg=t["success"] if r["mastery"]>=70 else t["warning"] if r["mastery"]>=45 else t["error"], font=FONTS["caption"], width=8, anchor="w").pack(side="left")
+                    lr = r["last_review"][5:] if r["last_review"] else "\u2014"
+                    tk.Label(row, text=lr, bg=row.cget("bg"), fg=t["muted"], font=FONTS["caption"], width=12, anchor="w").pack(side="left")
+                    ret = r["retention"]
+                    col = t["success"] if ret>=75 else t["warning"] if ret>=50 else t["error"]
+                    tk.Label(row, text=f'{ret:.0f}%', bg=row.cget("bg"), fg=col, font=FONTS["caption_bold"], width=6, anchor="w").pack(side="left")
+                    bar = RoundedProgress(row, theme=t, color=col, height=6)
+                    bar.pack(side="left", fill="x", expand=True, padx=SP["xs"])
+                    bar.draw(ret/100)
+                    if r["recommended"]:
+                        tk.Label(row, text="Review!", bg=row.cget("bg"), fg=t["warning"], font=FONTS["caption_bold"], width=8, anchor="w").pack(side="left")
+                        tk.Button(row, text="Review", font=FONTS["button_sm"], command=lambda lvl=r["level"], idx=r["lesson_idx"]: (self.controller.update_progress(level=lvl, lesson_index=idx, step_index=0), self.controller.show_frame(LearningPage)), padx=SP["sm"], pady=1).pack(side="left", padx=SP["xs"])
+                        for w in row.winfo_children():
+                            if isinstance(w, tk.Button):
+                                style_button(w, t, "warning", "warning_bg")
+                    else:
+                        tk.Label(row, text="OK", bg=row.cget("bg"), fg=t["muted"], font=FONTS["caption"], width=8, anchor="w").pack(side="left")
+                tk.Label(rcard.content, text="Retention = estimate of what you still recall (100% fresh \u2192 15% faded). Review when <70% or overdue. Powered by your spaced-repetition schedule.", bg=t["panel"], fg=t["muted"], font=FONTS["caption"], wraplength=600, justify="left").pack(fill="x", padx=SP["lg"], pady=(SP["sm"], SP["lg"]))
+                tk.Button(rcard.content, text="\U0001F4DA Open Review Queue", font=FONTS["button_sm"], command=lambda: self.controller.show_frame(ReviewQueuePage), padx=SP["md"], pady=SP["xs"]).pack(anchor="w", padx=SP["lg"], pady=(0, SP["md"]))
+                for w in rcard.content.winfo_children():
+                    if isinstance(w, tk.Button) and "Review Queue" in w.cget("text"):
+                        style_button(w, t, "secondary_btn_bg", "secondary_btn_hover")
+        except Exception:
+            pass
+
 
         self._section_title(inner, "\u21BA  Starting over", t)
         restart_row = tk.Frame(inner, bg=t["panel"])
@@ -14534,6 +15324,295 @@ class DailyChallengePage(tk.Frame):
 
 
 
+
+#==============================================================================
+# SECTION 28b — UI — PAGE: Memory Mode (Recall Training)
+# Original: new in v1.1
+# Purpose: MemoryModePage — timed recall: see -> hide -> rewrite -> score
+#==============================================================================
+
+class MemoryModePage(tk.Frame):
+    """Teach recall, not just recognition — the 'Memory Mode' pillar."""
+
+    def __init__(self, parent, controller):
+        super().__init__(parent, bg=controller.theme["bg"])
+        self.controller = controller
+        self._current = None  # current challenge dict
+        self._duration_key = tk.StringVar(value="medium")  # easy/medium/hard
+        self._level_filter = tk.StringVar(value="All")
+        self._timer_after = None
+        self._remaining = 0
+        self._hidden = False
+
+    def refresh(self):
+        # cancel prior timer
+        if getattr(self, "_timer_after", None):
+            try:
+                self.after_cancel(self._timer_after)
+            except Exception:
+                pass
+            self._timer_after = None
+        t = self.controller.theme
+        p = self.controller.progress
+        self.configure(bg=t["bg"])
+        for w in self.winfo_children():
+            w.destroy()
+
+        lesson_sets = self._get_lesson_sets()
+
+        # Scrollable
+        canvas = tk.Canvas(self, bg=t["bg"], highlightthickness=0)
+        vsb = tk.Scrollbar(self, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=vsb.set)
+        vsb.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        inner = tk.Frame(canvas, bg=t["bg"])
+        canvas.create_window((0,0), window=inner, anchor="nw")
+        inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        _enable_mousewheel(canvas, inner)
+
+        # Header
+        hdr = tk.Frame(inner, bg=t["panel"], padx=SP["xl"], pady=SP["lg"])
+        hdr.pack(fill="x", padx=SP["xl"], pady=(SP["xl"], SP["md"]))
+        tk.Label(hdr, text="\U0001F9E0  Memory Mode — Recall Training", bg=t["panel"], fg=t["text"], font=FONTS["heading_lg"]).pack(anchor="w")
+        tk.Label(hdr, text="See it. Hide it. Rewrite it from memory. This builds real reflexes — recognition is easy, recall is mastery. Pick a snippet, memorize for 10-30s, then retype exactly.",
+                 bg=t["panel"], fg=t["text_secondary"], font=FONTS["body_sm"], wraplength=680, justify="left").pack(anchor="w", pady=(SP["xs"], 0))
+
+        # Stats row from memory_stats
+        ms = p.get("memory_stats", {}) or {}
+        attempts = int(ms.get("attempts",0) or 0)
+        best = float(ms.get("best_accuracy",0) or 0)*100
+        avg = float(ms.get("avg_accuracy",0) or 0)*100
+        stats = tk.Frame(hdr, bg=t["panel"])
+        stats.pack(fill="x", pady=(SP["sm"], 0))
+        for icon, val, label, col in [
+            ("\U0001F4DD", str(attempts), "attempts", t["accent"]),
+            ("\u2B50", f"{best:.0f}%", "best recall", t["success"] if best>=90 else t["warning"] if best>=70 else t["muted"]),
+            ("\U0001F4CA", f"{avg:.0f}%", "avg recall", t["text"] ),
+            ("\U0001F3C6", str(ms.get("total_score",0)), "memory XP", t["streak_text"]),
+        ]:
+            card = tk.Frame(stats, bg=t["card"], bd=1, relief="solid", padx=SP["md"], pady=SP["sm"])
+            card.pack(side="left", padx=(0, SP["sm"]))
+            tk.Label(card, text=f"{icon} {val}", bg=t["card"], fg=t["text"], font=FONTS["heading_sm"]).pack(anchor="w")
+            tk.Label(card, text=label, bg=t["card"], fg=col, font=FONTS["caption"]).pack(anchor="w")
+
+        # Controls: difficulty (duration) + level filter + new challenge
+        ctrl = RoundedCard(inner, theme=t, page_bg=t["bg"], pad=SP["lg"])
+        ctrl.pack(fill="x", padx=SP["xl"], pady=(0, SP["md"]))
+        c = ctrl.content
+        tk.Label(c, text="1. Pick difficulty → 2. Pick level → 3. Start recall", bg=c.cget("bg"), fg=t["text"], font=FONTS["heading_sm"]).pack(anchor="w", padx=SP["lg"], pady=(SP["md"], SP["xs"]))
+
+        row1 = tk.Frame(c, bg=c.cget("bg"))
+        row1.pack(fill="x", padx=SP["lg"], pady=(SP["xs"], SP["sm"]))
+        tk.Label(row1, text="Memorize time:", bg=c.cget("bg"), fg=t["muted"], font=FONTS["caption_bold"]).pack(side="left")
+        for key, label in [("hard","Hard 10s"),("medium","Medium 20s"),("easy","Easy 30s")]:
+            b = tk.Radiobutton(row1, text=label, variable=self._duration_key, value=key, bg=c.cget("bg"), activebackground=c.cget("bg"), selectcolor=t["accent"], font=FONTS["body_sm"])
+            b.pack(side="left", padx=SP["sm"])
+
+        row2 = tk.Frame(c, bg=c.cget("bg"))
+        row2.pack(fill="x", padx=SP["lg"], pady=(0, SP["sm"]))
+        tk.Label(row2, text="Level:", bg=c.cget("bg"), fg=t["muted"], font=FONTS["caption_bold"]).pack(side="left")
+        levels = ["All","Beginner","Intermediate","Advanced"]
+        for lv in levels:
+            b = tk.Radiobutton(row2, text=lv, variable=self._level_filter, value=lv, bg=c.cget("bg"), activebackground=c.cget("bg"), selectcolor=t["accent"], font=FONTS["body_sm"])
+            b.pack(side="left", padx=SP["xs"])
+        tk.Button(row2, text="\U0001F500 New snippet", font=FONTS["button_sm"], command=self._pick_new, padx=SP["md"], pady=SP["xs"]).pack(side="right")
+        # style
+        for w in row2.winfo_children():
+            if isinstance(w, tk.Button):
+                style_button(w, t, "secondary_btn_bg", "secondary_btn_hover")
+
+        # Pick initial challenge if none
+        if self._current is None:
+            lvl = None if self._level_filter.get()=="All" else self._level_filter.get()
+            pool = get_memory_challenges(p, lesson_sets, level=lvl, count=1)
+            self._current = pool[0] if pool else None
+
+        # Challenge display
+        if not self._current:
+            tk.Label(inner, text="No snippets available — complete a lesson first.", bg=t["bg"], fg=t["muted"], font=FONTS["body"]).pack(pady=SP["xl"])
+            return
+
+        ch = self._current
+        # Card with snippet
+        card = RoundedCard(inner, theme=t, page_bg=t["bg"], pad=SP["lg"])
+        card.pack(fill="x", padx=SP["xl"], pady=(0, SP["md"]))
+        cc = card.content
+        tk.Label(cc, text=f"{ch['level']} \u00b7 {ch['title']}  \u00b7  {ch['unit'] or ch['topic']}  \u00b7  {ch['lines']} lines", bg=cc.cget("bg"), fg=t["muted"], font=FONTS["caption_bold"]).pack(anchor="w", padx=SP["lg"], pady=(SP["md"], SP["xs"]))
+        # Code display (will hide)
+        self._code_frame = tk.Frame(cc, bg=t["code_bg"], bd=1, relief="solid")
+        self._code_frame.pack(fill="x", padx=SP["lg"], pady=(SP["xs"], SP["sm"]))
+        self._code_label = tk.Label(self._code_frame, text=ch["code"], bg=t["code_bg"], fg=t["text"], font=FONTS["code"], anchor="nw", justify="left", padx=SP["md"], pady=SP["md"])
+        self._code_label.pack(fill="x")
+        self._hidden_label = tk.Label(self._code_frame, text="\U0001F512  Hidden — type from memory below", bg=t["warning_bg"], fg=t["warning"], font=FONTS["body_bold"], pady=SP["md"])
+        # Timer + controls
+        timer_row = tk.Frame(cc, bg=cc.cget("bg"))
+        timer_row.pack(fill="x", padx=SP["lg"], pady=(SP["sm"], SP["sm"]))
+        self._timer_var = tk.StringVar(value="Ready")
+        tk.Label(timer_row, textvariable=self._timer_var, bg=cc.cget("bg"), fg=t["accent"], font=FONTS["heading_sm"]).pack(side="left")
+        self._count_lbl = tk.Label(timer_row, text="", bg=cc.cget("bg"), fg=t["warning"], font=FONTS["body_bold"])
+        self._count_lbl.pack(side="left", padx=SP["md"])
+        self._start_btn = tk.Button(timer_row, text="\u25B6  Show & Start 10-30s", font=FONTS["button"], command=self._start_timer, padx=SP["xl"], pady=SP["sm"])
+        self._start_btn.pack(side="right")
+        style_button(self._start_btn, t, "accent", "accent_hover")
+        self._reveal_btn = tk.Button(timer_row, text="\U0001F441 Give up — reveal", font=FONTS["button_sm"], command=self._reveal, padx=SP["md"], pady=SP["xs"])
+        style_button(self._reveal_btn, t, "secondary_btn_bg", "secondary_btn_hover")
+        # Initially revealed
+        self._hidden = False
+        self._count_lbl.configure(text="")
+
+        # Editor for recall
+        tk.Label(cc, text="Retype from memory (exact — indents, colons, quotes matter):", bg=cc.cget("bg"), fg=t["muted"], font=FONTS["caption_bold"]).pack(anchor="w", padx=SP["lg"], pady=(SP["sm"], SP["xs"]))
+        self._editor = SyntaxEditor(cc, theme=t, height=8, font=FONTS["code"], bg=t["input_bg"], fg=t["text"], insertbackground=t["text"], relief="solid", bd=1, undo=True)
+        self._editor.pack(fill="x", padx=SP["lg"], pady=(0, SP["sm"]))
+        self._editor.set_code("")
+        self._editor.bind("<Control-Return>", lambda e: (self._score(), "break")[1])
+
+        btn_row = tk.Frame(cc, bg=cc.cget("bg"))
+        btn_row.pack(fill="x", padx=SP["lg"], pady=(0, SP["md"]))
+        self._score_btn = tk.Button(btn_row, text="\u2713 Score Recall", font=FONTS["button"], command=self._score, padx=SP["lg"], pady=SP["sm"])
+        self._score_btn.pack(side="left")
+        style_button(self._score_btn, t, "success", "success")
+        tk.Button(btn_row, text="Clear", font=FONTS["button_sm"], command=lambda: self._editor.set_code(""), padx=SP["md"], pady=SP["xs"]).pack(side="left", padx=SP["sm"])
+        style_button(tk.Button(btn_row, text="Copy target", font=FONTS["button_sm"], command=lambda: (self._reveal(), self._editor.set_code(ch["code"])), padx=SP["md"], pady=SP["xs"]), t, "secondary_btn_bg", "secondary_btn_hover")
+        # Copy button needs proper styling
+        for w in btn_row.winfo_children():
+            if isinstance(w, tk.Button) and w.cget("text")=="Copy target":
+                style_button(w, t, "secondary_btn_bg", "secondary_btn_hover")
+
+        # Feedback area
+        self._feedback_var = tk.StringVar(value="")
+        self._feedback_lbl = tk.Label(cc, textvariable=self._feedback_var, bg=cc.cget("bg"), fg=t["text"], font=FONTS["body_bold"], wraplength=620, justify="left", anchor="w")
+        self._feedback_lbl.pack(fill="x", padx=SP["lg"], pady=(SP["sm"], 0))
+        self._detail_lbl = tk.Label(cc, text="", bg=cc.cget("bg"), fg=t["text_secondary"], font=FONTS["body_sm"], wraplength=620, justify="left", anchor="w")
+        self._detail_lbl.pack(fill="x", padx=SP["lg"], pady=(SP["xs"], SP["lg"]))
+
+        # How scoring works
+        foot = tk.Frame(inner, bg=t["tip_bg"], padx=SP["lg"], pady=SP["md"])
+        foot.pack(fill="x", padx=SP["xl"], pady=(SP["md"], SP["xl"]))
+        tk.Label(foot, text="Scoring: 50% line exact + 50% character match. A = 95%+, B+ =85%+, need 60%+ for XP. Harder time = more XP.", bg=t["tip_bg"], fg=t["tip_text"], font=FONTS["caption"]).pack(anchor="w")
+        tk.Label(foot, text="Tip: Press Ctrl+Enter to score. The code hides after your chosen time — don't peek!", bg=t["tip_bg"], fg=t["tip_text"], font=FONTS["caption"]).pack(anchor="w")
+
+    def _get_lesson_sets(self):
+        lp = self.controller.frames.get(LearningPage)
+        if lp and getattr(lp, "lesson_sets", None):
+            return lp.lesson_sets
+        try:
+            return get_lesson_sets_for_language(current_language(self.controller.progress))
+        except Exception:
+            return {}
+
+    def _pick_new(self):
+        lvl = None if self._level_filter.get()=="All" else self._level_filter.get()
+        pool = get_memory_challenges(self.controller.progress, self._get_lesson_sets(), level=lvl, count=20)
+        # avoid immediate repeat
+        if self._current and len(pool)>1:
+            pool = [p for p in pool if p["code"] != self._current["code"]] or pool
+        import random as _r
+        self._current = _r.choice(pool) if pool else None
+        # cancel timer
+        if self._timer_after:
+            try: self.after_cancel(self._timer_after)
+            except: pass
+            self._timer_after=None
+        self.refresh()
+
+    def _start_timer(self):
+        # Determine duration
+        key = self._duration_key.get() or "medium"
+        dur = MEMORY_DURATIONS.get(key, 20)
+        self._remaining = dur
+        self._hidden = False
+        # Ensure code visible
+        try:
+            self._hidden_label.pack_forget()
+            self._code_label.pack(fill="x")
+        except: pass
+        self._timer_var.set(f"Memorize — {dur}s")
+        self._start_btn.configure(state="disabled")
+        self._count_lbl.configure(text=str(dur))
+        self._tick()
+
+    def _tick(self):
+        if self._remaining <= 0:
+            self._hide()
+            return
+        self._count_lbl.configure(text=str(self._remaining))
+        self._remaining -= 1
+        self._timer_after = self.after(1000, self._tick)
+
+    def _hide(self):
+        if self._hidden:
+            return
+        self._hidden = True
+        try:
+            self._code_label.pack_forget()
+            self._hidden_label.pack(fill="x", padx=SP["md"], pady=SP["md"])
+        except: pass
+        self._timer_var.set("Hidden — now type from memory!")
+        self._count_lbl.configure(text="\U0001F512")
+        self._start_btn.configure(state="normal", text="\U0001F501 Show again")
+        try:
+            self._editor.focus_set()
+        except: pass
+
+    def _reveal(self):
+        # cancel timer
+        if self._timer_after:
+            try: self.after_cancel(self._timer_after)
+            except: pass
+            self._timer_after=None
+        self._hidden = False
+        try:
+            self._hidden_label.pack_forget()
+            self._code_label.pack(fill="x")
+        except: pass
+        self._timer_var.set("Revealed — study again, then hide")
+        self._count_lbl.configure(text="")
+        self._start_btn.configure(state="normal", text="\u25B6 Start again")
+
+    def _score(self):
+        if not self._current:
+            return
+        target = self._current["code"]
+        typed = self._editor.get("1.0", tk.END)
+        key = self._duration_key.get() or "medium"
+        score = record_memory_attempt(self.controller.progress, target, typed, duration_key=key)
+        # also record generic XP? already via record_memory_attempt total_score, but also award via award_xp
+        try:
+            award_xp(self.controller.progress, score.get("xp_earned", 5), "memory recall")
+            save_progress(self.controller.progress_path, self.controller.progress)
+            try: self.controller.sidebar.refresh()
+            except: pass
+            try: self.controller.check_badges()
+            except: pass
+        except Exception:
+            pass
+        acc = score["overall"]*100
+        grade = score["grade"]
+        xp = score.get("xp_earned",0)
+        self._feedback_var.set(f"{grade} — {acc:.0f}% recall  \u00b7  +{xp} XP  \u00b7  {score['feedback']}")
+        # Color by grade
+        t = self.controller.theme
+        col = t["success"] if grade in ("A","B+") else t["warning"] if grade in ("B","C") else t["error"]
+        self._feedback_lbl.configure(fg=col)
+        # Detail diff hint
+        detail = f"Line match {score['matched']}/{score['total']}  \u00b7  Char {score['char_acc']*100:.0f}%  \u00b7  Line {score['line_acc']*100:.0f}%"
+        if grade in ("D","F"):
+            detail += "  \u00b7  Tip: check colons, indents (4 spaces), and quotes."
+        self._detail_lbl.configure(text=detail)
+        # Celebrate if A
+        if grade == "A":
+            try: self.controller.celebrate(f"\U0001F9E0 Perfect recall! +{xp} XP", big=True)
+            except: pass
+        elif grade in ("B+","B"):
+            try: show_toast(self.winfo_toplevel(), f"\U0001F4AA {grade} recall +{xp} XP", t)
+            except: pass
+        # Offer to pick new
+        self._start_btn.configure(text="\U0001F500 Next snippet")
+
+
+
 #==============================================================================
 # SECTION 29 — UI — PAGE: Settings
 # Original: app/ui/pages/settings
@@ -15452,6 +16531,8 @@ class LearningPage(tk.Frame):
                 self._build_example_view(left, right, step, t, level, lesson_idx, step_idx)
             elif step["type"] == "muscle":
                 self._build_muscle_view(left, right, step, t, level, lesson_idx, step_idx)
+            elif step["type"] == "memory":
+                self._build_memory_view(left, right, step, t, level, lesson_idx, step_idx)
 
         nav = tk.Frame(self, bg=t["bg"])
         nav.pack(fill="x", padx=SP["xl"], pady=SP["md"])
@@ -17315,6 +18396,10 @@ class LearningPage(tk.Frame):
                 sets = ensure_example_and_muscle_steps(sets)
             except Exception:
                 pass
+            try:
+                sets = ensure_memory_steps(sets)
+            except Exception:
+                pass
             return sets
         except Exception:
             return build_lesson_sets()
@@ -17329,7 +18414,22 @@ class LearningPage(tk.Frame):
             lang = current_language(self.controller.progress)
         except Exception:
             lang = "python"
-        return run_code_for_language(code, lang, timeout=timeout, trace=trace)
+        res = run_code_for_language(code, lang, timeout=timeout, trace=trace)
+        # --- v1.1: central mistake tracking ---
+        try:
+            if not res.get("ok"):
+                err = res.get("error") or res.get("explained") or ""
+                # Use current step title if available via caller? fallback to generic
+                title = ""
+                try:
+                    # Try to infer from progress level/title if possible — not critical
+                    title = self.controller.progress.get("level","")
+                except: pass
+                record_mistake(self.controller.progress, err, code, title)
+                save_progress(self.controller.progress_path, self.controller.progress)
+        except Exception:
+            pass
+        return res
 
 
 
