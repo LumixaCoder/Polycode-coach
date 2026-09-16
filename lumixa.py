@@ -14361,6 +14361,7 @@ class DrillHubPage(tk.Frame):
     def __init__(self, parent, controller):
         super().__init__(parent, bg=controller.theme["bg"])
         self.controller = controller
+        self._level_filter = tk.StringVar(value="All")
 
     def _get_lesson_sets(self):
         lp = self.controller.frames.get(LearningPage) if hasattr(self.controller, "frames") else None
@@ -14435,8 +14436,10 @@ class DrillHubPage(tk.Frame):
         hdr = tk.Frame(inner, bg=t["panel"], padx=SP["xl"], pady=SP["lg"])
         hdr.pack(fill="x", padx=SP["xl"], pady=(SP["xl"], SP["md"]))
         tk.Label(hdr, text="🏋️  Examples & Muscle Memory Hub", bg=t["panel"], fg=t["text"], font=FONTS["heading_lg"]).pack(anchor="w")
-        tk.Label(hdr, text="Learn through runnable examples (read + predict + run), then lock them into muscle memory by retyping exactly — 3 perfect in a row. “Lots of review” keeps each pattern coming back in 1, 2, 4, 7 days until it sticks.",
+        tk.Label(hdr, text="Learn through runnable examples (read + predict + run), then lock them into muscle memory by retyping exactly — 3 perfect in a row. “Lots of review” keeps each pattern coming back in 1, 2, 4, 7 days until it sticks.\n≠ Memory Mode: Memory hides the code timed (10-30s) and grades recall — Drills keeps code visible with line-by-line notes + Coach help.",
                   bg=t["panel"], fg=t["text_secondary"], font=FONTS["body_sm"], wraplength=680, justify="left").pack(anchor="w", pady=(SP["xs"], 0))
+        # cross-link to Memory for contrast
+        tk.Label(hdr, text="Tip: Need hide-then-recall? → Memory tab. Need study-with-notes? You’re in the right place.", bg=t["panel"], fg=t["muted"], font=FONTS["caption"], wraplength=680, justify="left").pack(anchor="w", pady=(SP["xs"], 0))
         # stats row
         stats = tk.Frame(hdr, bg=t["panel"])
         stats.pack(fill="x", pady=(SP["sm"], 0))
@@ -14555,27 +14558,27 @@ class DrillHubPage(tk.Frame):
         tk.Label(gallery_hdr, text="📖 Examples Gallery — learn through runnable patterns", bg=t["bg"], fg=t["text"], font=FONTS["heading_md"]).pack(anchor="w")
         tk.Label(gallery_hdr, text="Each card is a real, runnable mini-program with line-by-line notes. Open it in the lesson to study, or copy it to the Sandbox to tweak.",
                   bg=t["bg"], fg=t["text_secondary"], font=FONTS["body_sm"], wraplength=680, justify="left").pack(anchor="w", pady=(SP["xs"], 0))
-        # filter by level
+        # filter by level — persists via self._level_filter (fixed 2026: was local var resetting to All)
         lib = build_example_library(lesson_sets)
         # group by level for easy scanning
         levels_order = ["Beginner","Intermediate","Advanced"]
-        level_filter = tk.StringVar(value="All")
+        # ensure persisted var exists (survives refresh)
+        if not hasattr(self, "_level_filter") or self._level_filter is None:
+            self._level_filter = tk.StringVar(value="All")
         filt_row = tk.Frame(inner, bg=t["bg"])
         filt_row.pack(fill="x", padx=SP["xl"], pady=(SP["sm"], SP["sm"]))
         tk.Label(filt_row, text="Filter:", bg=t["bg"], fg=t["muted"], font=FONTS["caption_bold"]).pack(side="left")
         for lv in ["All"] + levels_order:
             b = tk.Button(filt_row, text=lv, font=FONTS["button_sm"],
-                          command=lambda v=lv: (level_filter.set(v), self.refresh()),
+                          command=lambda v=lv: (self._level_filter.set(v), self.refresh()),
                           padx=SP["sm"], pady=SP["xs"])
             b.pack(side="left", padx=SP["xs"])
-            style_button(b, t, "accent" if level_filter.get()==lv else "secondary_btn_bg",
-                         "accent_hover" if level_filter.get()==lv else "secondary_btn_hover")
-        # live read of filter is tricky with refresh — use p stored filter instead
-        # Instead, show All always and let user pick via second pass; keep simple: show all grouped
-        shown_levels = levels_order if level_filter.get()=="All" else [level_filter.get()]
+            style_button(b, t, "accent" if self._level_filter.get()==lv else "secondary_btn_bg",
+                         "accent_hover" if self._level_filter.get()==lv else "secondary_btn_hover")
+        shown_levels = levels_order if self._level_filter.get()=="All" else [self._level_filter.get()]
         # render groups
         for lvl in levels_order:
-            if lvl not in shown_levels and level_filter.get()!="All":
+            if lvl not in shown_levels and self._level_filter.get()!="All":
                 continue
             items = [e for e in lib if e["level"]==lvl]
             if not items:
@@ -15397,8 +15400,9 @@ class MemoryModePage(tk.Frame):
         hdr = tk.Frame(inner, bg=t["panel"], padx=SP["xl"], pady=SP["lg"])
         hdr.pack(fill="x", padx=SP["xl"], pady=(SP["xl"], SP["md"]))
         tk.Label(hdr, text="\U0001F9E0  Memory Mode — Recall Training", bg=t["panel"], fg=t["text"], font=FONTS["heading_lg"]).pack(anchor="w")
-        tk.Label(hdr, text="See it. Hide it. Rewrite it from memory. This builds real reflexes — recognition is easy, recall is mastery. Pick a snippet, memorize for 10-30s, then retype exactly.",
-                 bg=t["panel"], fg=t["text_secondary"], font=FONTS["body_sm"], wraplength=680, justify="left").pack(anchor="w", pady=(SP["xs"], 0))
+        tk.Label(hdr, text="See it. Hide it. Rewrite it from memory. This builds real reflexes — recognition is easy, recall is mastery. Pick a snippet, memorize for 10-30s, then retype exactly.\n≠ Drills Hub: Drills keeps code visible with line-by-line notes and needs 3 perfect retypes + spaced 1/2/4/7d — Memory hides timed and grades 50% line + 50% char.",
+                  bg=t["panel"], fg=t["text_secondary"], font=FONTS["body_sm"], wraplength=680, justify="left").pack(anchor="w", pady=(SP["xs"], 0))
+        tk.Label(hdr, text="Tip: Need study-with-notes + Coach? → Drills Hub (More menu). Need strict timed recall? Stay here.", bg=t["panel"], fg=t["muted"], font=FONTS["caption"], wraplength=680, justify="left").pack(anchor="w", pady=(SP["xs"], 0))
 
         # Stats row from memory_stats
         ms = p.get("memory_stats", {}) or {}
