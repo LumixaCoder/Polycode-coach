@@ -13516,9 +13516,9 @@ class SandboxPage(tk.Frame):
         body.add(right, minsize=340)
 
         top = tk.Frame(right, bg=t["bg"])
-        right.add(top, height=260, minsize=150)
+        right.add(top, height=360, minsize=310)
         bottom = tk.Frame(right, bg=t["bg"])
-        right.add(bottom, height=160, minsize=110)
+        right.add(bottom, height=180, minsize=120)
 
         # ---------- Project Playground (left panel) ----------
         tk.Label(ideas, text="\U0001F4A1  Project Playground", bg=t["card"], fg=t["text"],
@@ -13591,7 +13591,7 @@ class SandboxPage(tk.Frame):
         self._wrap_var = tk.BooleanVar(value=_prev_wrap)
         p["sandbox_wrap"] = bool(self._wrap_var.get())
         editor_frame = tk.Frame(top, bg=t["bg"])
-        editor_frame.pack(fill="both", expand=True, padx=SP["lg"], pady=(0, SP["sm"]))
+        # pack deferred — bottom rows are packed first so Run buttons never get clipped (editor shrinks instead)
         initial_wrap = "word" if self._wrap_var.get() else "none"
         editor = SyntaxEditor(editor_frame, theme=t, height=12, font=FONTS["code"],
                               bg=t["input_bg"], fg=t["text"], insertbackground=t["text"],
@@ -13657,7 +13657,7 @@ class SandboxPage(tk.Frame):
 
         # ---- Input for input() (one line per input() call) ----
         input_frame = tk.Frame(top, bg=t["bg"])
-        input_frame.pack(fill="x", padx=SP["lg"], pady=(SP["xs"], 0))
+        # pack deferred to bottom area (see below)
         tk.Label(input_frame, text="Input for input()  (one line per call, optional):",
                  bg=t["bg"], fg=t["muted"], font=FONTS["caption"], anchor="w").pack(anchor="w")
         input_wrap = tk.Frame(input_frame, bg=t["bg"])
@@ -13683,7 +13683,7 @@ class SandboxPage(tk.Frame):
         # ANY import (os, sys, pathlib, requests, pygame, etc.) and eval/exec.
         # Lessons/graded runs stay in safe mode. Preference is saved to progress.
         unrestricted_row = tk.Frame(top, bg=t["bg"])
-        unrestricted_row.pack(fill="x", padx=SP["lg"], pady=(SP["sm"], 0))
+        # pack deferred to bottom area (see below)
         # Preserve toggle across refresh() rebuilds
         _prev_unrestricted = bool(p.get("sandbox_unrestricted", False))
         try:
@@ -13722,9 +13722,14 @@ class SandboxPage(tk.Frame):
                  bg=t["bg"], fg=t["muted"], font=FONTS["caption"], anchor="e").pack(side="right")
 
         btn_row2 = tk.Frame(top, bg=t["bg"])
-        btn_row2.pack(fill="x", padx=SP["lg"], pady=(SP["sm"], SP["sm"]))
-        tk.Label(btn_row2, text="Tip: Ctrl+Enter = Run (sandbox)  •  Shift+Enter = Run as Program (real, no limits)  •  Ctrl+S saves",
-                 bg=t["bg"], fg=t["muted"], font=FONTS["caption"], anchor="w").pack(side="left")
+        # pack bottom-fixed rows first (in reverse visual order) so Run buttons always stay visible — editor shrinks instead
+        btn_row2.pack(side="bottom", fill="x", padx=SP["lg"], pady=(SP["sm"], SP["sm"]))
+        unrestricted_row.pack(side="bottom", fill="x", padx=SP["lg"], pady=(SP["sm"], 0))
+        input_frame.pack(side="bottom", fill="x", padx=SP["lg"], pady=(SP["xs"], 0))
+        editor_frame.pack(fill="both", expand=True, padx=SP["lg"], pady=(0, SP["sm"]))
+        # Tip label — created now, packed AFTER buttons so buttons always get space (label gets remaining & wraps)
+        tip_lbl = tk.Label(btn_row2, text="Tip: Ctrl+Enter = Run (sandbox)  •  Shift+Enter = Run as Program (real, no limits)  •  Ctrl+S saves",
+                 bg=t["bg"], fg=t["muted"], font=FONTS["caption"], anchor="w", justify="left", wraplength=320)
 
         # ---------- Output (right, bottom) ----------
         tk.Label(bottom, text="Output", bg=t["bg"], fg=t["muted"],
@@ -13869,6 +13874,8 @@ class SandboxPage(tk.Frame):
                               padx=SP["md"], pady=SP["xs"])
         clear_btn.pack(side="right", padx=(0, SP["sm"]))
         style_button(clear_btn, t, "secondary_btn_bg", "secondary_btn_hover")
+        # Now pack tip label — after buttons so it gets leftover space and wraps instead of pushing buttons off
+        tip_lbl.pack(side="left", fill="x", expand=True, padx=(0, SP["sm"]))
 
         editor.bind("<Control-Return>", lambda _e: (run_code(), "break")[1])
         editor.bind("<Command-Return>", lambda _e: (run_code(), "break")[1])
