@@ -1,7 +1,7 @@
 # Polycode Coach — Code Learning Coach
 
 ![demo](demo.gif)
-<p align="center"><em>Full guided tour (32s, 900px, 28 frames) — Cold start → Pick Python → Welcome → Placement Quiz → Result (Beginner) → Learning: Concept → Practice (type → Run → +5 XP) → Debug (broken → Coach hint → Fix +8 XP) → Final Project → Progress (XP/streak/heatmap) → Skill Tree → Review → Drills → Daily Challenge → Sandbox Cards → Sandbox Run (output) → Badges → Settings → Planning Guide — cursor + callouts, global palette</em></p>
+<p align="center"><em>Full guided tour (35s, 900px, 29 frames) — Cold start → Pick Python → Welcome → Placement Quiz → Result (Beginner) → Learning: Concept → Practice (type → Run → +5 XP) → Debug (broken → Coach hint → Fix +8 XP) → Final Project → Progress (XP/streak/heatmap) → Skill Tree → Review → Drills → Daily Challenge → Memory Mode (See → Hide → Retype) → Sandbox Cards → Sandbox Run (output) → Badges → Settings → Planning Guide — cursor + callouts, global palette</em></p>
 
 A Tkinter app that assesses your level in Python & Java, then walks you through
 interactive lessons with hands-on code practice, quizzes, final projects,
@@ -52,14 +52,14 @@ py lumixa.py
   and on exit, so reopening the app puts your exact code back with nothing
   retyped.
 - Final projects per lesson with progressive starting hints
-- XP, streaks, level roadmap, and progress dashboard
-- Spaced-repetition review queue
+- XP, streaks, level roadmap, and progress dashboard — now with 5 tabs: **Overview, Activity (heatmap), Reflex (0-1000 score), Mistakes (top 5 + targeted practice), Retention (% mastery)**
+- Spaced-repetition review queue + **Drill Hub** (muscle-memory reps, visible notes, 3× perfect retypes, 1/2/4/7-day spacing) + **Memory Mode** (timed recall: See → Hide → Retype, 10s/20s/30s, 50% line + 50% char accuracy, Code Reflex score)
 - **Adaptive coaching** — the Progress page reads your performance log and
   highlights the units you found hardest, with a "Strengthen" button to jump
-  straight back to a weak lesson
+  straight back to a weak lesson — plus **Mistake Analytics** that classifies your errors and suggests drills
 - **Autosave** — progress is saved atomically (crash-safe) after every step,
   lesson, project, and review, plus a periodic backup and a final save on close
-- Light/dark themes and fullscreen
+- Light/dark themes and fullscreen — tabs now organized as 7 primary + **More** dropdown (Review/Drills/Skill Tree/Badges/Planning) so every feature fits 1060×740
 
 ## The Goal of the App
 
@@ -82,8 +82,9 @@ Here is the journey:
    your current level and lesson topic, so it stretches you where you already are
    (pure-code problems plus the bundled dataset challenges).
 6. **Revisit your reviews** — spaced repetition re-surfaces lessons you
-   found hard so the material actually sticks.
-7. **Pass the level quiz** to unlock the next level (Beginner → Intermediate →
+   found hard so the material actually sticks. For muscle memory, use **Drills** (visible with notes, 3 perfect retypes, then 1/2/4/7-day spacing) — and for true recall, try **Memory Mode** (See → Hide → Retype, 10s/20s/30s timed, scored 50% line + 50% char).
+7. **Track mastery on Progress** — 5 tabs: **Overview, Activity (heatmap), Reflex (0–1000 Code Reflex score), Mistakes (top 5 + targeted drills), Retention (% per concept)**. The **Skill Tree** shows your visual roadmap; **Badges** (23) and **Planning Guide** (2/4/6-week tracks) keep you motivated and organized.
+8. **Pass the level quiz** to unlock the next level (Beginner → Intermediate →
    Advanced) and keep going until you've finished every lesson.
 
 ## How to Earn XP
