@@ -10445,6 +10445,8 @@ class PythonLearnerApp(tk.Tk):
 
         self.bind("<F11>", lambda e: self.toggle_fullscreen())
         self.bind("<Escape>", lambda e: self.exit_fullscreen())
+        self.bind("<F1>", lambda e: self._toggle_coach_hotkey())
+        self.bind("<Control-h>", lambda e: self._toggle_coach_hotkey())
         # Global shortcuts: Ctrl+S / Cmd+S saves progress + any open draft
         self.bind_all("<Control-s>", lambda e: self._save_all_progress())
         self.bind_all("<Command-s>", lambda e: self._save_all_progress())
@@ -11090,6 +11092,60 @@ class PythonLearnerApp(tk.Tk):
                 btn.configure(text="\u26F6 Fullscreen")
         except Exception:
             pass
+
+    def _toggle_coach_hotkey(self):
+        """F1 / Ctrl+H — find the visible CoachPanel and toggle it via its button."""
+        # try current page (usually LearningPage or DailyChallenge)
+        cur = self.frames.get(getattr(self, "_last_page", None), None)
+        candidates = [cur] if cur else list(self.frames.values())
+        for page in candidates:
+            if page is None:
+                continue
+            try:
+                # walk the page for a CoachPanel instance
+                stack = [page]
+                found = None
+                found_btn = None
+                while stack:
+                    w = stack.pop()
+                    if isinstance(w, CoachPanel):
+                        found = w
+                        break
+                    try:
+                        for child in w.winfo_children():
+                            # btn whose command closes to toggling coach (heuristic: text has Coach)
+                            if isinstance(child, tk.Button) and "Coach" in str(child.cget("text")):
+                                # postpone, but prefer panel found
+                                found_btn = child
+                            stack.append(child)
+                    except Exception:
+                        continue
+                if found is not None:
+                    # find its button sibling if not already
+                    if found_btn is None:
+                        # search parent of panel for button
+                        try:
+                            parent = found.master
+                            for child in parent.winfo_children():
+                                if isinstance(child, tk.Button) and "Coach" in str(child.cget("text")):
+                                    found_btn = child
+                                    break
+                        except Exception:
+                            pass
+                    if found_btn is not None:
+                        found.toggle(found_btn)
+                        # ensure we see it — scroll outer canvas to coach
+                        try:
+                            self.update_idletasks()
+                            found.see(found)  # no-op if not scrollable
+                        except Exception:
+                            pass
+                        show_toast(self, "Coach " + ("opened" if found.shown else "closed") + " — F1 / Ctrl+H", self.theme)
+                        return "break"
+            except Exception:
+                continue
+        show_toast(self, "Coach is on Practice/Debug/Fill/Concept pages — open a lesson and press F1", self.theme)
+        return "break"
 
     def _toggle_theme_btn(self):
         nxt = "dark" if self.theme_name == "light" else "light"
@@ -13988,9 +14044,16 @@ class CoachPanel(tk.Frame):
         self.guided_idx = 0
         self.guided_answers = {}
 
-        self.log = tk.Text(self, height=9, font=FONTS["code_sm"], bg=t["code_bg"],
+        self.log = tk.Text(self, height=12, font=FONTS["code_sm"], bg=t["code_bg"],
                            fg=t["text"], relief="solid", bd=1, wrap="word", state="disabled")
         self.log.pack(fill="x", padx=SP["md"], pady=(SP["md"], SP["xs"]))
+
+        # make panel stand out even when collapsed — thick accent border
+        self.configure(highlightbackground=t["accent"], highlightcolor=t["accent"], highlightthickness=0, bd=0)
+        try:
+            self.log.configure(highlightbackground=t["accent"], highlightthickness=1)
+        except Exception:
+            pass
 
         chips = tk.Frame(self, bg=t["panel"])
         chips.pack(fill="x", padx=SP["md"])
@@ -14020,6 +14083,13 @@ class CoachPanel(tk.Frame):
         self._add_bubble("Coach", "Hi! I'll guide you through \"" + str(label) +
                                   "\". Use the buttons or type a question \u2014 I'll point out what's "
                                   "wrong, give hints that get more specific, and help when you're stuck.")
+        # Auto-show so learner sees help without hunting — toggle will hide if they want
+        self.shown = True
+        try:
+            self.pack(fill="x", padx=SP["lg"], pady=(SP["md"], SP["sm"]))
+            self.configure(highlightthickness=2)
+        except Exception:
+            pass
 
     def toggle(self, btn):
         if self.shown:
@@ -15346,10 +15416,14 @@ class DailyChallengePage(tk.Frame):
             return code_entry.get("1.0", tk.END)
 
         coach_panel = CoachPanel(right, t, get_code, spec["coach_step"], spec["title"], self.controller)
-        coach_btn = tk.Button(btn_row, text="\U0001F3C5 Ask Coach", font=FONTS["button_sm"],
-                              command=lambda: coach_panel.toggle(coach_btn), padx=SP["md"], pady=SP["xs"])
+        coach_btn = tk.Button(btn_row, text="\U0001F3C5 Close Coach", font=FONTS["button_sm"],
+                               command=lambda: coach_panel.toggle(coach_btn), padx=SP["md"], pady=SP["xs"])
         coach_btn.pack(side="left")
         style_button(coach_btn, t, "warning", "warning_bg")
+        try:
+            coach_btn.configure(bg=t["accent"], fg="white")
+        except Exception:
+            pass
 
         code_entry.bind("<Control-Return>", lambda _e: (run_code(), "break")[1])
         code_entry.bind("<Command-Return>", lambda _e: (run_code(), "break")[1])
@@ -16819,6 +16893,20 @@ class LearningPage(tk.Frame):
         cont_btn.pack(pady=SP["lg"])
         style_button(cont_btn, t, "success", "success")
 
+        # Coach even on concept — easy to find, explains what’s next
+        def _get_concept_code():
+            return step.get("example", "")
+        _concept_coach = CoachPanel(right, t, _get_concept_code, step, step.get("title", ""), self.controller)
+        _concept_btn = tk.Button(right, text="\U0001F3C5 Close Coach", font=FONTS["button_sm"],
+                                 command=lambda: _concept_coach.toggle(_concept_btn), padx=SP["md"], pady=SP["xs"])
+        # place coach trigger right under continue for discoverability
+        _concept_btn.pack(pady=(0, SP["sm"]))
+        style_button(_concept_btn, t, "warning", "warning_bg")
+        try:
+            _concept_btn.configure(bg=t["accent"], fg="white")
+        except Exception:
+            pass
+
     def _build_practice_view(self, left, right, step, t, level, lesson_idx, step_idx, lesson_title=""):
         inner = self._build_left_scroll(left, t)
 
@@ -17048,10 +17136,14 @@ class LearningPage(tk.Frame):
             return code_entry.get("1.0", tk.END)
 
         coach_panel = CoachPanel(right, t, get_code, step, lesson_title, self.controller)
-        coach_btn = tk.Button(btn_row, text="\U0001F3C5 Ask Coach", font=FONTS["button_sm"],
-                              command=lambda: coach_panel.toggle(coach_btn), padx=SP["md"], pady=SP["xs"])
+        coach_btn = tk.Button(btn_row, text="\U0001F3C5 Close Coach", font=FONTS["button_sm"],
+                               command=lambda: coach_panel.toggle(coach_btn), padx=SP["md"], pady=SP["xs"])
         coach_btn.pack(side="left")
         style_button(coach_btn, t, "warning", "warning_bg")
+        try:
+            coach_btn.configure(bg=t["accent"], fg="white")
+        except Exception:
+            pass
 
         trace_box = tk.Text(right, height=9, font=FONTS["code_sm"], bg=t["code_bg"],
                             fg=t["text"], relief="solid", bd=1, wrap="word")
@@ -17229,10 +17321,14 @@ class LearningPage(tk.Frame):
             return code_entry.get("1.0", tk.END)
 
         coach_panel = CoachPanel(right, t, get_code, step, lesson_title, self.controller)
-        coach_btn = tk.Button(btn_row, text="\U0001F3C5 Ask Coach", font=FONTS["button_sm"],
+        coach_btn = tk.Button(btn_row, text="\U0001F3C5 Close Coach", font=FONTS["button_sm"],
                               command=lambda: coach_panel.toggle(coach_btn), padx=SP["md"], pady=SP["xs"])
         coach_btn.pack(side="left", padx=SP["sm"])
         style_button(coach_btn, t, "warning", "warning_bg")
+        try:
+            coach_btn.configure(bg=t["accent"], fg="white")
+        except Exception:
+            pass
 
         code_entry.bind("<Control-Return>", lambda _e: (run(), "break")[1])
         code_entry.bind("<Command-Return>", lambda _e: (run(), "break")[1])
@@ -17374,10 +17470,14 @@ class LearningPage(tk.Frame):
             return code_entry.get("1.0", tk.END)
 
         coach_panel = CoachPanel(right, t, get_code, step, "", self.controller)
-        coach_btn = tk.Button(btn_row, text="\U0001F3C5 Ask Coach", font=FONTS["button_sm"],
+        coach_btn = tk.Button(btn_row, text="\U0001F3C5 Close Coach", font=FONTS["button_sm"],
                               command=lambda: coach_panel.toggle(coach_btn), padx=SP["md"], pady=SP["xs"])
         coach_btn.pack(side="left", padx=SP["sm"])
         style_button(coach_btn, t, "warning", "warning_bg")
+        try:
+            coach_btn.configure(bg=t["accent"], fg="white")
+        except Exception:
+            pass
 
         code_entry.bind("<Control-Return>", lambda _e: (run(), "break")[1])
         code_entry.bind("<Command-Return>", lambda _e: (run(), "break")[1])
@@ -17580,9 +17680,13 @@ class LearningPage(tk.Frame):
         def get_code():
             return editor.get("1.0", tk.END)
         coach_panel = CoachPanel(right, t, get_code, step, "", self.controller)
-        coach_btn = tk.Button(btn_row, text="Ask Coach", font=FONTS["button_sm"], command=lambda: coach_panel.toggle(coach_btn), padx=SP["md"], pady=SP["xs"])
+        coach_btn = tk.Button(btn_row, text="Close Coach", font=FONTS["button_sm"], command=lambda: coach_panel.toggle(coach_btn), padx=SP["md"], pady=SP["xs"])
         coach_btn.pack(side="left", padx=SP["sm"])
         style_button(coach_btn, t, "warning", "warning_bg")
+        try:
+            coach_btn.configure(bg=t["accent"], fg="white")
+        except Exception:
+            pass
         editor.bind("<Control-Return>", lambda _e: (run_example(), "break")[1])
         editor.bind("<Command-Return>", lambda _e: (run_example(), "break")[1])
 
@@ -17762,9 +17866,13 @@ class LearningPage(tk.Frame):
         def get_code():
             return editor.get("1.0", tk.END)
         coach_panel = CoachPanel(right, t, get_code, step, "", self.controller)
-        coach_btn = tk.Button(btn_row, text="Ask Coach", font=FONTS["button_sm"], command=lambda: coach_panel.toggle(coach_btn), padx=SP["md"], pady=SP["xs"])
+        coach_btn = tk.Button(btn_row, text="Close Coach", font=FONTS["button_sm"], command=lambda: coach_panel.toggle(coach_btn), padx=SP["md"], pady=SP["xs"])
         coach_btn.pack(side="left", padx=SP["sm"])
         style_button(coach_btn, t, "warning", "warning_bg")
+        try:
+            coach_btn.configure(bg=t["accent"], fg="white")
+        except Exception:
+            pass
         editor.bind("<Control-Return>", lambda _e: (check_muscle(), "break")[1])
         editor.bind("<Command-Return>", lambda _e: (check_muscle(), "break")[1])
 
@@ -18326,10 +18434,14 @@ class LearningPage(tk.Frame):
         coach_panel = CoachPanel(right, t,
                                  lambda: proj_entry.get("1.0", tk.END),
                                  coach_step, proj.get("title", lesson.get("title", "")), self.controller)
-        coach_btn = tk.Button(btn_row, text="\U0001F3C5 Ask Coach", font=FONTS["button_sm"],
+        coach_btn = tk.Button(btn_row, text="\U0001F3C5 Close Coach", font=FONTS["button_sm"],
                               command=lambda: coach_panel.toggle(coach_btn), padx=SP["md"], pady=SP["xs"])
         coach_btn.pack(side="left", padx=SP["sm"])
         style_button(coach_btn, t, "warning", "warning_bg")
+        try:
+            coach_btn.configure(bg=t["accent"], fg="white")
+        except Exception:
+            pass
 
         proj_entry.bind("<Control-Return>", lambda _e: (_check_ref(), "break")[1])
         proj_entry.bind("<Command-Return>", lambda _e: (_check_ref(), "break")[1])
