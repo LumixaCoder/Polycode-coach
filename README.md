@@ -13,12 +13,12 @@ spaced review, and progress/XP tracking.
 
 ## Download (Windows, no install)
 
-**Latest release:** [PolycodeCoach-v1.1.1.zip](https://github.com/LumixaCoder/Polycode-coach/releases/latest/download/PolycodeCoach-v1.1.1.zip) (22 MB) — unzip and double-click `PolycodeCoach/PolycodeCoach.exe` or `run.bat`. No Python needed.
+**Latest release:** [PolycodeCoach-v1.2.0.zip](https://github.com/LumixaCoder/Polycode-coach/releases/latest/download/PolycodeCoach-v1.2.0.zip) (23 MB) — unzip and double-click `PolycodeCoach/PolycodeCoach.exe` or `run.bat`. No Python needed.
 
-- See [all releases](../../releases) · [v1.1.1 notes](../../releases/tag/v1.1.1) · [SHA256](../../releases/download/v1.1.1/PolycodeCoach-v1.1.1.zip.sha256)
+- See [all releases](../../releases) · [v1.2.0 notes](../../releases/tag/v1.2.0) · [SHA256](../../releases/download/v1.2.0/PolycodeCoach-v1.2.0.zip.sha256)
 - Your progress saves to `%APPDATA%\PolycodeCoach\learning_progress.json` (move it via `Settings → File location`).
 
-> **For devs:** pushing a tag `v*` (e.g., `git tag v1.0.1; git push origin v1.0.1`) auto-builds the zip on GitHub Actions (`.github/workflows/release.yml`) and attaches it to the Release — no manual upload needed. See `RELEASE_NOTES_v1.1.1.md` for what's in v1.1.1.
+> **For devs:** pushing a tag `v*` (e.g., `git tag v1.0.1; git push origin v1.0.1`) auto-builds the zip on GitHub Actions (`.github/workflows/release.yml`) and attaches it to the Release — no manual upload needed. See `RELEASE_NOTES_v1.2.0.md` for what's in v1.2.0.
 
 ## Run the GUI
 
