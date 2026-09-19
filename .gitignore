@@ -48,10 +48,14 @@ FOR_YOU_ONLY_CODE_PROCESS.txt
 PROJECT_SUMMARY.txt
 *PRIVATE*
 *private*
-# Keep GitHub workflows for CI/Releases; ignore everything else in .github
+# Keep GitHub workflows + community health files; ignore everything else in .github
 .github/*
 !.github/workflows
 !.github/workflows/**
+!.github/dependabot.yml
+!.github/pull_request_template.md
+!.github/ISSUE_TEMPLATE
+!.github/ISSUE_TEMPLATE/**
 opencode.json
 
 # OS / IDE

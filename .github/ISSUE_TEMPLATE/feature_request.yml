@@ -1,0 +1,48 @@
+name: Feature request
+description: Idea for a lesson, XP tweak, or UX polish?
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Love it — we read every request. Check `README.md` Levels/Roadmap + existing issues first.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / context
+      description: What’s painful or missing today?
+      placeholder: "Drill Hub spacing 1/2/4/7 is too fast for Java generics..."
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What should happen? Mock, snippet, or lesson outline.
+      placeholder: |
+        Add a new lesson "Java Streams" with steps:
+        - concept: ...
+        - practice: `nums.stream().filter(...)`
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Lessons / curriculum
+        - UI / navigation
+        - Gamification (XP, badges, streaks)
+        - Sandbox / Coach
+        - Performance / build
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: check
+    attributes:
+      label: Willing to help?
+      options:
+        - label: I can PR this (see CONTRIBUTING.md)
+        - label: I can test a preview zip

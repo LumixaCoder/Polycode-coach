@@ -1,0 +1,67 @@
+name: Bug report
+description: Something broke? Tell us so we can fix it.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Fill what you can — logs + repro code are gold. Security issues → use `SECURITY.md` (private report), not this form.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: From Settings → About or zip name (e.g., v1.1.1, commit 5b9aceb)
+      placeholder: "v1.1.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS
+      options:
+        - Windows 11
+        - Windows 10
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: python
+    attributes:
+      label: Python version (if from source)
+      placeholder: "3.13.14 or N/A (zip)"
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps + code snippet that triggers it
+      placeholder: |
+        1. Open lesson "Loops" step 2
+        2. Paste: `for i in range(3): print(i)`
+        3. Click Run → ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs actual
+      placeholder: "Expected: +5 XP. Actual: Coach says 'add for loop' even though code has it."
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / output
+      description: Paste sandbox output, traceback, or %APPDATA%\PolycodeCoach\learning_progress.json snippet if relevant
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues
+          required: true
+        - label: I tried the latest release (see README Download)
+          required: false

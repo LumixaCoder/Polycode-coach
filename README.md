@@ -1,5 +1,7 @@
 # Polycode Coach — Code Learning Coach
 
+[![CI](https://github.com/LumixaCoder/Polycode-coach/actions/workflows/ci.yml/badge.svg)](https://github.com/LumixaCoder/Polycode-coach/actions/workflows/ci.yml) [![Release](https://github.com/LumixaCoder/Polycode-coach/actions/workflows/release.yml/badge.svg)](https://github.com/LumixaCoder/Polycode-coach/actions/workflows/release.yml) [![Latest Release](https://img.shields.io/github/v/release/LumixaCoder/Polycode-coach?label=latest&logo=github)](https://github.com/LumixaCoder/Polycode-coach/releases/latest) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/downloads/) [![Downloads](https://img.shields.io/github/downloads/LumixaCoder/Polycode-coach/total?color=green)](https://github.com/LumixaCoder/Polycode-coach/releases)
+
 ![demo](demo.gif)
 <p align="center"><em>Full guided tour (35s, 900px, 29 frames) — Cold start → Pick Python → Welcome → Placement Quiz → Result (Beginner) → Learning: Concept → Practice (type → Run → +5 XP) → Debug (broken → Coach hint → Fix +8 XP) → Final Project → Progress (XP/streak/heatmap) → Skill Tree → Review → Drills → Daily Challenge → Memory Mode (See → Hide → Retype) → Sandbox Cards → Sandbox Run (output) → Badges → Settings → Planning Guide — cursor + callouts, global palette</em></p>
 
