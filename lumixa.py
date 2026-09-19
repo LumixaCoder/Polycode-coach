@@ -15665,8 +15665,21 @@ class SettingsPage(tk.Frame):
             w.destroy()
         t = self.controller.theme
         self.configure(bg=t["bg"])
+        # Scrollable wrapper so all 9 cards never clip on small window
+        scroll_outer = tk.Frame(self, bg=t["bg"])
+        scroll_outer.pack(fill="both", expand=True)
+        canvas = tk.Canvas(scroll_outer, bg=t["bg"], highlightthickness=0)
+        vsb = tk.Scrollbar(scroll_outer, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=vsb.set)
+        vsb.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        inner = tk.Frame(canvas, bg=t["bg"])
+        canvas.create_window((0, 0), window=inner, anchor="nw")
+        inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        _enable_mousewheel(canvas, inner)
+        self._scroll_inner = inner
 
-        hdr = tk.Frame(self, bg=t["bg"])
+        hdr = tk.Frame(inner, bg=t["bg"])
         hdr.pack(fill="x", padx=SP["xl"], pady=(SP["xl"], SP["md"]))
         tk.Label(
             hdr, text="\u2699  Settings", bg=t["bg"], fg=t["text"],
@@ -15721,7 +15734,8 @@ class SettingsPage(tk.Frame):
         style_button(chooser, t, "secondary_btn_bg", "secondary_btn_hover")
 
     def _card(self, t, title, subtitle):
-        card = RoundedCard(self, theme=t, page_bg=t["bg"], pad=SP["lg"])
+        parent = getattr(self, '_scroll_inner', self)
+        card = RoundedCard(parent, theme=t, page_bg=t["bg"], pad=SP["lg"])
         card.pack(fill="x", padx=SP["xl"], pady=(0, SP["md"]))
         card.content.configure(bg=t["panel"])
         tk.Label(card.content, text=title, bg=t["panel"], fg=t["text"],
@@ -16489,7 +16503,20 @@ class LearningPage(tk.Frame):
             for w in banner2.winfo_children():
                 w.bind("<Button-1>", lambda e: self.controller.show_frame(DrillHubPage))
 
-        header = tk.Frame(self, bg=t["panel"], padx=SP["xl"], pady=SP["md"])
+        # --- Scrollable main area so tall lessons never clip (wheel + bar) ---
+        scroll_outer = tk.Frame(self, bg=t["bg"])
+        scroll_outer.pack(fill="both", expand=True)
+        canvas = tk.Canvas(scroll_outer, bg=t["bg"], highlightthickness=0)
+        vsb = tk.Scrollbar(scroll_outer, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=vsb.set)
+        vsb.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        inner = tk.Frame(canvas, bg=t["bg"])
+        canvas.create_window((0, 0), window=inner, anchor="nw")
+        inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        _enable_mousewheel(canvas, inner)
+
+        header = tk.Frame(inner, bg=t["panel"], padx=SP["xl"], pady=SP["md"])
         header.pack(fill="x")
 
         tk.Label(header, text=lesson["title"], bg=t["panel"], fg=t["text"],
@@ -16517,13 +16544,13 @@ class LearningPage(tk.Frame):
             pct = (step_idx + 1) / len(steps)
         else:
             pct = 0
-        bar = tk.Frame(self, bg=t["progress_bg"], height=6)
+        bar = tk.Frame(inner, bg=t["progress_bg"], height=6)
         bar.pack(fill="x", padx=SP["xl"], pady=(0, SP["sm"]))
         bar.pack_propagate(False)
         tk.Frame(bar, bg=t["progress_fill"]).place(relx=0, rely=0, relwidth=pct, relheight=1.0)
 
         if steps:
-            dots = tk.Frame(self, bg=t["bg"])
+            dots = tk.Frame(inner, bg=t["bg"])
             dots.pack(fill="x", padx=SP["xl"], pady=(0, SP["md"]))
             for i in range(len(steps)):
                 sk = step_key(level, lesson_idx, i)
@@ -16537,7 +16564,7 @@ class LearningPage(tk.Frame):
                     c.create_line(4.1, 7.2, 6.0, 9.1, 10.4, 4.2,
                                   fill="#ffffff", width=2)
 
-        pw = tk.PanedWindow(self, orient="horizontal", sashwidth=3,
+        pw = tk.PanedWindow(inner, orient="horizontal", sashwidth=3,
                             sashrelief="flat", bg=t["divider"])
         pw.pack(fill="both", expand=True, padx=SP["xl"], pady=(0, SP["sm"]))
 
@@ -16567,7 +16594,7 @@ class LearningPage(tk.Frame):
             elif step["type"] == "memory":
                 self._build_memory_view(left, right, step, t, level, lesson_idx, step_idx)
 
-        nav = tk.Frame(self, bg=t["bg"])
+        nav = tk.Frame(inner, bg=t["bg"])
         nav.pack(fill="x", padx=SP["xl"], pady=SP["md"])
 
         if all_steps_done:
@@ -16644,7 +16671,7 @@ class LearningPage(tk.Frame):
 
         suggestion, reason, _ratio = assess_performance(p, level, self.lesson_sets)
         if suggestion == "up" and (lesson_idx + 1) % 2 == 0 and lesson_idx > 0:
-            banner = tk.Frame(self, bg=t["success_bg"], bd=0, relief="flat")
+            banner = tk.Frame(inner, bg=t["success_bg"], bd=0, relief="flat")
             banner.pack(fill="x", padx=SP["xl"], pady=(0, SP["sm"]))
             b_bar = tk.Frame(banner, bg=t["success"], width=4)
             b_bar.pack(side="left", fill="y")
@@ -16700,7 +16727,7 @@ class LearningPage(tk.Frame):
             style_button(dismiss_btn, t, "secondary_btn_bg", "secondary_btn_hover")
 
         elif suggestion == "stay" and (lesson_idx + 1) % 2 == 0 and lesson_idx > 0:
-            banner = tk.Frame(self, bg=t["warning_bg"], bd=0, relief="flat")
+            banner = tk.Frame(inner, bg=t["warning_bg"], bd=0, relief="flat")
             banner.pack(fill="x", padx=SP["xl"], pady=(0, SP["sm"]))
             b_bar = tk.Frame(banner, bg=t["warning"], width=4)
             b_bar.pack(side="left", fill="y")
