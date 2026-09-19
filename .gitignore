@@ -43,6 +43,11 @@ run_dev.bat
 run_dev_windowed.bat
 run_forever.bat
 run_watch.bat
+# PRIVATE helper docs — local only, never commit
+FOR_YOU_ONLY_CODE_PROCESS.txt
+PROJECT_SUMMARY.txt
+*PRIVATE*
+*private*
 # Keep GitHub workflows for CI/Releases; ignore everything else in .github
 .github/*
 !.github/workflows
