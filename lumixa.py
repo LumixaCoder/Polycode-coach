@@ -10738,6 +10738,7 @@ class PythonLearnerApp(tk.Tk):
             ("\U0001F333 Skill Tree", lambda: self.show_frame(SkillTreePage)),
             ("\U0001F3C6 Badges", lambda: self.show_frame(BadgesPage)),
             ("\U0001F5D3 Planning", lambda: self.show_frame(PlanningGuidePage)),
+            ("\U0001F393 Solo Lab", lambda: self.show_frame(SoloLabPage)),
         ]
         for txt2, cmd in primary:
             b = tk.Button(nav, text=txt2, command=cmd, bg=self.theme["navbar_bg"],
@@ -10800,7 +10801,7 @@ class PythonLearnerApp(tk.Tk):
         self.content.grid_columnconfigure(0, weight=1)
         self.frames = {}
 
-        for cls in (LanguageSelectionPage, WelcomePage, SurveyPage, ResultPage, ProgressPage, ReviewQueuePage, DrillHubPage, SkillTreePage, DailyChallengePage, LearningPage, BadgesPage, SandboxPage, SettingsPage, PlanningGuidePage, MemoryModePage):
+        for cls in (LanguageSelectionPage, WelcomePage, SurveyPage, ResultPage, ProgressPage, ReviewQueuePage, DrillHubPage, SkillTreePage, SoloLabPage, DailyChallengePage, LearningPage, BadgesPage, SandboxPage, SettingsPage, PlanningGuidePage, MemoryModePage):
             f = cls(self.content, self)
             self.frames[cls] = f
             f.grid(row=0, column=0, sticky="nsew")
@@ -10839,8 +10840,8 @@ class PythonLearnerApp(tk.Tk):
         try:
             if not hasattr(self, "sidebar") or self.sidebar is None:
                 return
-            # Full-width pages - no lesson sidebar (guide is also full-width, optional)
-            if page in (LanguageSelectionPage, SettingsPage, PlanningGuidePage):
+            # Full-width pages - no lesson sidebar (guide/solo are full-width for focus)
+            if page in (LanguageSelectionPage, SettingsPage, PlanningGuidePage, SoloLabPage):
                 try:
                     self.sidebar.pack_forget()
                 except Exception:
@@ -14966,6 +14967,103 @@ class SkillTreePage(tk.Frame):
         self.controller.update_progress(level=level, lesson_index=idx, step_index=0, completed_lessons=restored)
         self.controller.show_frame(LearningPage)
 
+
+
+#==============================================================================
+# SECTION 27b — UI — PAGE: Solo Lab (self-study)
+# Purpose: SoloLabPage — 7 solo exercises mirroring SELF_STUDY.md, no auto-Coach
+#==============================================================================
+
+class SoloLabPage(tk.Frame):
+    def __init__(self, parent, controller):
+        super().__init__(parent, bg=controller.theme["bg"])
+        self.controller = controller
+
+    def refresh(self):
+        for w in self.winfo_children():
+            w.destroy()
+        t = self.controller.theme
+        self.configure(bg=t["bg"])
+        # scrollable inner like LearningPage:16506
+        outer = tk.Frame(self, bg=t["bg"])
+        outer.pack(fill="both", expand=True)
+        canvas = tk.Canvas(outer, bg=t["bg"], highlightthickness=0)
+        vsb = tk.Scrollbar(outer, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=vsb.set)
+        vsb.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        inner = tk.Frame(canvas, bg=t["bg"])
+        canvas.create_window((0, 0), window=inner, anchor="nw")
+        inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        _enable_mousewheel(canvas, inner)
+
+        hdr = tk.Frame(inner, bg=t["panel"], padx=SP["xl"], pady=SP["md"])
+        hdr.pack(fill="x")
+        tk.Label(hdr, text="\U0001F393 Solo Lab — learn the codebase by doing", bg=t["panel"], fg=t["text"], font=FONTS["heading_md"]).pack(side="left")
+        tk.Label(hdr, text="No auto-Coach • F1 if you want it • 7 steps • keep Sandbox for free play", bg=t["panel"], fg=t["muted"], font=FONTS["caption"]).pack(side="right")
+        # intro
+        intro = tk.Frame(inner, bg=t["tip_bg"], padx=SP["lg"], pady=SP["md"])
+        intro.pack(fill="x", padx=SP["xl"], pady=SP["md"])
+        tk.Label(intro, text="Solo = you check, you grade. Sandbox is free playground (no XP). Solo is structured (XP on check) and teaches you how this app is built so you can expand it — adding a lesson is the #1 way to grow it (languages/python/lessons.py:123).", bg=t["tip_bg"], fg=t["tip_text"], font=FONTS["body_sm"], wraplength=760, justify="left").pack(anchor="w")
+
+        steps = [
+            ("1. Map 17k lines", "lumixa.py:10403 PythonLearnerApp, 11286 Sidebar, 16449 Learning, 13975 Coach, 13474 Sandbox — change THEMES accent ~300 and run.", "python"),
+            ("2. Lesson Builder", "languages/python/lessons.py:123 build_lesson_sets() — add a practice {type, instruction, check: lambda c: 'len(' in c} to Beginner[0].", "python"),
+            ("3. Sandbox Solo", "run_user_code:9285 restricted (os Blocked 430) vs unrestricted (Run anything 13687). Try import os fix, open data/us_states.json 50.", "sandbox"),
+            ("4. Progress", "%APPDATA%/PolycodeCoach/learning_progress.json 4296 — default_progress:4413 award_xp:4928 +5. Edit, check file.", "progress"),
+            ("5. Build", "build.py:227 PyInstaller --onedir + hidden_imports languages.* + data 222 → dist/PolycodeCoach + runtime 338. python build.py", "build"),
+            ("6. Self-Test", "tests -q -k 'not test_gui_window_auto_closes' 152 passed ci.yml:34. Break a check → fail → revert.", "pytest"),
+            ("7. Ship", "git tag v1.1.2-test; git push origin v1.1.2-test → release.yml:7 zip to Releases sidebar, then delete tag.", "ship"),
+        ]
+        p = self.controller.progress
+        solo = p.setdefault("solo_lab", {})
+        for i, (title, desc, key) in enumerate(steps):
+            card = RoundedCard(inner, theme=t, page_bg=t["bg"], pad=SP["md"])
+            card.pack(fill="x", padx=SP["xl"], pady=(0, SP["sm"]))
+            row = tk.Frame(card.content, bg=card.content.cget("bg"))
+            row.pack(fill="x", padx=SP["lg"], pady=SP["md"])
+            left = tk.Frame(row, bg=row.cget("bg"))
+            left.pack(side="left", fill="x", expand=True)
+            tk.Label(left, text=title, bg=left.cget("bg"), fg=t["text"], font=FONTS["body_bold"], anchor="w").pack(anchor="w")
+            tk.Label(left, text=desc, bg=left.cget("bg"), fg=t["muted"], font=FONTS["caption"], anchor="w", wraplength=640, justify="left").pack(anchor="w", pady=(2,0))
+            # progress check
+            done = bool(solo.get(str(i)))
+            chk_var = tk.BooleanVar(value=done)
+            def _toggle(idx=i, var=chk_var):
+                solo[str(idx)] = bool(var.get())
+                if var.get():
+                    try:
+                        award_xp(p, 5, "solo lab")
+                        save_progress(self.controller.progress_path, p)
+                        show_toast(self.winfo_toplevel(), "Solo step done! +5 XP", t)
+                        self.controller.sidebar.refresh()
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        save_progress(self.controller.progress_path, p)
+                    except Exception:
+                        pass
+            chk = tk.Checkbutton(row, text="Done", variable=chk_var, command=_toggle, bg=row.cget("bg"), fg=t["text"], selectcolor=t["panel"], font=FONTS["caption"])
+            chk.pack(side="right", padx=SP["sm"])
+            # action buttons
+            act = tk.Frame(card.content, bg=card.content.cget("bg"))
+            act.pack(fill="x", padx=SP["lg"], pady=(0, SP["md"]))
+            if key == "sandbox":
+                tk.Button(act, text="\u2328 Open Sandbox", font=FONTS["button_sm"], command=lambda: self.controller.show_frame(SandboxPage), padx=SP["md"], pady=SP["xs"]).pack(side="left")
+            elif key == "progress":
+                tk.Button(act, text="\U0001F4CA Progress", font=FONTS["button_sm"], command=lambda: self.controller.show_frame(ProgressPage), padx=SP["md"], pady=SP["xs"]).pack(side="left")
+            else:
+                tk.Label(act, text="Open file: " + title.split(" ",1)[1] if " " in title else title, bg=act.cget("bg"), fg=t["muted"], font=FONTS["caption"]).pack(side="left")
+            # style buttons
+            for child in act.winfo_children():
+                if isinstance(child, tk.Button):
+                    style_button(child, t, "secondary_btn_bg", "secondary_btn_hover")
+        # footer diff vs Sandbox
+        foot = tk.Frame(inner, bg=t["panel"], padx=SP["lg"], pady=SP["md"])
+        foot.pack(fill="x", padx=SP["xl"], pady=SP["lg"])
+        tk.Label(foot, text="Solo vs Sandbox", bg=t["panel"], fg=t["text"], font=FONTS["body_bold"]).pack(anchor="w")
+        tk.Label(foot, text="Sandbox = free play, no XP, no grade, 25 starters 13431. Solo = structured, checked, +5 XP per step, teaches you to expand lessons (languages/<id>/lessons.py:123 is the #1 growth path, build.py:106 auto-discovers new languages). Both use SyntaxEditor:10191 + run_user_code:9285, but Solo stays Coach-hidden until F1.", bg=t["panel"], fg=t["muted"], font=FONTS["caption"], wraplength=740, justify="left").pack(anchor="w", pady=(4,0))
 
 
 #==============================================================================
