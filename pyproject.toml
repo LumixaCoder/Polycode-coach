@@ -1,0 +1,28 @@
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+# lumixa.py is 17k single-file, keep rules light for now — expand later
+lint.select = ["E", "F", "W", "C90"]
+lint.ignore = ["E501"]  # line too long — handled by formatter
+lint.mccabe.max-complexity = 15
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.13"
+ignore_missing_imports = true
+# lumixa.py uses dynamic imports (languages.*) — allow
+disallow_untyped_defs = false
+warn_return_any = false
+warn_unused_ignores = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --tb=short"
+# keep CI's -k "not test_gui_window_auto_closes" in ci.yml, not here — local still runs it
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"

@@ -28,12 +28,12 @@ learning_progress.json.bak
 *.bak
 
 # DEV ONLY — kept locally, not on GitHub (user repo is lumixa.py + languages/ + data/ only)
+# tests/ now tracked for CI health (was ignored → pytest 404, ci red 35477105720)
 learn_python_gui.py
 generate_guided_hq_gif.py
 build.py
 dev.py
 watch_build.py
-tests/
 _archive_modular_before_single_file/
 app/
 CODEMAP.md

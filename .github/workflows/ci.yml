@@ -19,16 +19,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install pytest
       - name: py_compile (catch SyntaxErrors)
+        shell: pwsh
         run: |
           python -m py_compile lumixa.py
-          python -m py_compile build.py
-          python -m py_compile watch_build.py
-          python -m py_compile dev.py
-          python -m py_compile languages/python/lessons.py
-          python -m py_compile languages/java/lessons.py
+          foreach ($f in @("languages/python/lessons.py","languages/java/lessons.py")) { if (Test-Path $f) { python -m py_compile $f } else { Write-Host "skip $f — not on user repo" } }
+          foreach ($f in @("build.py","watch_build.py","dev.py")) { if (Test-Path $f) { python -m py_compile $f } else { Write-Host "skip $f — dev-only" } }
       - name: shim sync check
         run: |
           python -c "import lesson_data, languages.python.lessons; a=lesson_data.build_lesson_sets(); b=languages.python.lessons.build_lesson_sets(); assert len(a)==len(b), 'shim vs canonical size mismatch'; print('shim OK', {k: len(v) for k,v in a.items()}, {k: len(v) for k,v in b.items()})"
       - name: pytest
         # test_gui_window_auto_closes opens a real Tk window via mainloop() — flaky/headless on GH Windows runners; skip on CI (local still runs it)
-        run: python -m pytest tests -q -k "not test_gui_window_auto_closes"
+        shell: pwsh
+        run: |
+          if (Test-Path tests) { python -m pytest tests -q -k "not test_gui_window_auto_closes" } else { Write-Host "no tests on user repo — skip"; exit 0 }
