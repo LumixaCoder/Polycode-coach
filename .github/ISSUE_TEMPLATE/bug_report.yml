@@ -6,13 +6,13 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting! Fill what you can — logs + repro code are gold. Security issues → use `SECURITY.md` (private report), not this form.
+        **We fix every report — thank you!** Fill what you can — logs + repro code are gold. For sandbox escapes/private data use `SECURITY.md` (email `treytonzadra@gmail.com`), otherwise public issue is perfect.
   - type: input
     id: version
     attributes:
       label: Version
-      description: From Settings → About or zip name (e.g., v1.1.1, commit 5b9aceb)
-      placeholder: "v1.1.1"
+      description: From Settings → About or zip name (e.g., v1.2.0, commit af15e33)
+      placeholder: "v1.2.0"
     validations:
       required: true
   - type: dropdown
