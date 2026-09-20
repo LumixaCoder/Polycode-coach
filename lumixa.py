@@ -13785,7 +13785,7 @@ class SandboxPage(tk.Frame):
         input_frame.pack(side="bottom", fill="x", padx=SP["lg"], pady=(SP["xs"], 0))
         editor_frame.pack(fill="both", expand=True, padx=SP["lg"], pady=(0, SP["sm"]))
         # Tip label — created now, packed AFTER buttons so buttons always get space (label gets remaining & wraps)
-        tip_lbl = tk.Label(btn_row2, text="Tip: Ctrl+Enter = Run (sandbox)  •  Shift+Enter = Run as Program (real, no limits)  •  Ctrl+S saves",
+        tip_lbl = tk.Label(btn_row2, text="Tip: Ctrl+Enter = Run Code (sandbox)  •  Ctrl+S saves  •  Check Run anything to allow any import",
                  bg=t["bg"], fg=t["muted"], font=FONTS["caption"], anchor="w", justify="left", wraplength=320)
 
         # ---------- Output (right, bottom) ----------
@@ -13854,77 +13854,10 @@ class SandboxPage(tk.Frame):
                     output_box.insert("1.0", body)
             output_box.configure(state="disabled")
 
-        def run_real():
-            """Run the editor code as a real program outside the sandbox (no limits).
-
-            Uses run_real_program_for_language so tkinter windows stay open,
-            any import (os, sys, pygame…) works, and the Output box shows the
-            real stdout/stderr. This is the “actual program” the learner asked for.
-            """
-            code2 = editor.get("1.0", tk.END)
-            save_draft()
-            inputs_val2 = ""
-            try:
-                if hasattr(self, "_input_box") and self._input_box:
-                    inputs_val2 = self._input_box.get("1.0", tk.END).strip()
-            except Exception:
-                inputs_val2 = ""
-            output_box.configure(state="normal")
-            output_box.delete("1.0", tk.END)
-            if not code2.strip():
-                output_box.insert("1.0", "Type some code first, then hit Run.")
-                output_box.configure(state="disabled")
-                return
-            output_box.insert("1.0", "Running as real program… (close any Tk window to finish)\n")
-            self.update_idletasks()
-            try:
-                _unrestricted_flag2 = bool(self._unrestricted.get())
-            except Exception:
-                _unrestricted_flag2 = bool(p.get("sandbox_unrestricted", False))
-            # Real run ignores sandbox allow-list entirely
-            lang2 = current_language(self.controller.progress)
-            # Use real runner (Python: temp file, Java: unrestricted compile)
-            if (lang2 or "python").lower() == "java":
-                res2 = run_java_code(code2, timeout=10, inputs=inputs_val2 if inputs_val2 else None, unrestricted=True)
-            else:
-                res2 = run_real_program(code2, timeout=10, inputs=inputs_val2 if inputs_val2 else None)
-            output_box.delete("1.0", tk.END)
-            if res2.get("jdk_missing") and res2.get("warning"):
-                output_box.insert("1.0", res2["warning"] + "\n\n")
-            if res2["blocked"]:
-                output_box.insert(tk.END, res2["blocked"])
-            elif not res2["ok"]:
-                shown2 = res2["output"]
-                if shown2 and res2["error"]:
-                    shown2 += "\n\n"
-                detail2 = res2.get("explained") or res2["error"] or "(error)"
-                if res2.get("jdk_missing"):
-                    output_box.insert(tk.END, detail2)
-                else:
-                    output_box.insert("1.0" if not res2.get("jdk_missing") else tk.END, shown2 + detail2 if shown2 else detail2)
-            else:
-                body2 = res2["output"] if res2["output"].strip() else "(real program ran — no output; add print() to see)"
-                if res2.get("jdk_missing"):
-                    output_box.insert(tk.END, body2)
-                else:
-                    output_box.insert("1.0", body2 + "\n\n[ran as real program — no sandbox limits, Tk window stayed open until closed]")
-            output_box.configure(state="disabled")
-
         run_btn = tk.Button(btn_row2, text="\u25B6 Run Code", font=FONTS["button"],
                             command=run_code, padx=SP["lg"], pady=SP["md"])
         run_btn.pack(side="right")
         style_button(run_btn, t, "accent", "accent_hover")
-
-        real_btn = tk.Button(btn_row2, text="▶ Run as Program", font=FONTS["button_sm"],
-                             command=run_real, padx=SP["md"], pady=SP["xs"])
-        real_btn.pack(side="right", padx=(0, SP["sm"]))
-        style_button(real_btn, t, "success", "success")
-        # Tooltip via status: hover shows help
-        try:
-            real_btn.bind("<Enter>", lambda e: real_btn.configure(text="▶ Run as Program  (no limits, Tk stays open)"))
-            real_btn.bind("<Leave>", lambda e: real_btn.configure(text="▶ Run as Program"))
-        except Exception:
-            pass
 
         clear_btn = tk.Button(btn_row2, text="Clear", font=FONTS["button_sm"],
                               command=lambda: editor.set_code(""),
@@ -13936,10 +13869,6 @@ class SandboxPage(tk.Frame):
 
         editor.bind("<Control-Return>", lambda _e: (run_code(), "break")[1])
         editor.bind("<Command-Return>", lambda _e: (run_code(), "break")[1])
-        # Shift+Enter runs the real program (actual file, no sandbox) — the “actual program” the user asked for
-        editor.bind("<Shift-Return>", lambda _e: (run_real(), "break")[1])
-        editor.bind("<Control-Shift-Return>", lambda _e: (run_real(), "break")[1])
-        editor.bind("<Command-Shift-Return>", lambda _e: (run_real(), "break")[1])
 
     def _active_projects(self):
         try:
